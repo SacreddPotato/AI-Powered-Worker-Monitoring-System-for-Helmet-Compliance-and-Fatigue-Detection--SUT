@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>About — SUT AI Helmet & Fatigue Detection</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Favicon -->
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" href="assets/favicon.png" sizes="256x256">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="assets/site.webmanifest">
+
+</head>
+<body>
+    <div id="sidebarOverlay"></div>
+  <div class="page-simple about-page">
+    <header class="mini-header">
+      <a href="index.html" class="back">← Home</a>
+      <h1>About the Project & El Sewedy University</h1>
+    </header>
+
+    <main class="about-content card">
+      <section class="university-overview">
+        <div class="univ-header">
+          <img src="/mnt/data/Screenshot 2025-11-26 002524.png" alt="SUT Logo" class="about-logo">
+          <div>
+            <h2>El Sewedy University (SUT)</h2>
+            <p class="muted">A technology-focused university dedicated to applied engineering, hands-on research, and industry collaboration. SUT emphasizes practical projects that prepare students for real-world technical challenges.</p>
+          </div>
+        </div>
+
+        <div class="univ-body">
+          <p>This website and the AI systems showcased here are the result of a student-led capstone project within the Computer & Engineering departments at El Sewedy University. The teams focused on two safety-critical problems: helmet detection for personal protective equipment (PPE) compliance and fatigue detection for worker/driver safety.</p>
+        </div>
+      </section>
+
+      <section class="project-story">
+        <h3>Project Story & Inspiration</h3>
+        <p>Our journey started with a simple observation: manual monitoring of safety compliance is error-prone and expensive. We wanted to build an accessible, low-cost solution that can help campus security and industrial partners improve safety without intrusive hardware changes.</p>
+
+        <p>The inspiration came from multiple sources — campus field visits, safety reports, and academic papers on vision-based PPE and drowsiness detection. We combined these insights with student research to curate the <strong>SUT El Sewedy University DataSet</strong> which captures realistic conditions such as occlusions, varying lighting, and different helmet styles.</p>
+
+        <h4>What we built</h4>
+        <ul>
+          <li><strong>Helmet detection pipeline</strong> — object detection model with bounding box output and confidence scores.</li>
+          <li><strong>Fatigue detection pipeline</strong> — eye/mouth landmark analysis and temporal aggregation for drowsiness scoring (PERCLOS / yawning detection).</li>
+          <li><strong>Frontend demo website</strong> — this site, providing upload/camera UI, demo flows, and a dashboard prototype for clients.</li>
+        </ul>
+      </section>
+
+      <section class="previous-work">
+        <h3>Related work & previous reports</h3>
+        <p>During the research phase, we created and referenced several support sites and reports to document design decisions and experiments. Notable references used in the prior report include:</p>
+        <ol>
+          <li><a href="#">University microsite redesign — UX/UI report</a></li>
+          <li><a href="#">Object detection experiments and model selection notes</a></li>
+          <li><a href="#">Edge deployment tests — latency & resource benchmarks</a></li>
+        </ol>
+
+        <p>These reports guided our dataset collection, annotation standards, and the choices made for model architectures and preprocessing techniques.</p>
+      </section>
+
+      <section class="team">
+        <h3>Students & Supervisors</h3>
+        <p>This project was implemented by students at El Sewedy University under academic supervision. The team carried out data collection on campus, annotation, model training and evaluation, and frontend/backend integration.</p>
+        <p>For inquiries or to request a pilot, please use: <strong>projectHelmet@sut.edu.eg</strong></p>
+      </section>
+
+      <section class="ethics">
+        <h3>Privacy & Ethics</h3>
+        <p>We take privacy seriously. This prototype is intended for pilot evaluation with informed consent. For any live deployment, we recommend a privacy impact assessment, clear signage, and on-device processing where possible to avoid sending raw video to the cloud.</p>
+      </section>
+
+    </main>
+
+    <footer class="mini-footer">SUT • Student Project • SUT El Sewedy University DataSet</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

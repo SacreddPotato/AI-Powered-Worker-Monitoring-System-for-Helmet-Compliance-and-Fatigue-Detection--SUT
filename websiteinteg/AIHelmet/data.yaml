@@ -1,0 +1,7 @@
+path: C:/Users/Haneen/Desktop/helmet_dataset
+
+train: images/train
+val: images/val
+
+nc: 1
+names: ["helmet"]

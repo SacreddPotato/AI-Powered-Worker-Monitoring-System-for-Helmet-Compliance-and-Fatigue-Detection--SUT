@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Fatigue Detection — SUT</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+</head>
+<body>
+  <div id="sidebarOverlay"></div>
+
+  <div class="page-simple">
+    <header class="mini-header">
+      <a href="index.html" class="back">← Home</a>
+      <h1>AI Fatigue Detection</h1>
+    </header>
+
+    <main class="demo-area">
+      <section class="demo-left">
+        <h2>Fatigue detection (Live AI)</h2>
+        <p class="lead">This system uses a Hybrid AI (Swin Transformer + Geometry) to detect fatigue. Click <strong>Use Camera</strong> to start the Python backend stream.</p>
+
+        <div class="controls">
+            <form action="/upload_video" method="post" enctype="multipart/form-data" style="display:inline-block">
+                <label class="btn">Upload Video <input name="file" type="file" accept="video/*" style="display:none" onchange="this.form.submit()"></label>
+            </form>
+            
+          <button id="camFat" class="btn primary">Use Camera</button>
+          <button id="clearFat" class="btn outline">Stop / Clear</button>
+        </div>
+
+        <div class="viewer card" id="viewerWrapFat" style="min-height: 400px; display: flex; align-items: center; justify-content: center; background: #000; position: relative;">
+            <img id="previewFat" src="assets/sut.logo.png" alt="preview" style="max-height: 300px; opacity: 0.5;">
+            
+            </div>
+
+        <div class="notes">
+          <p><strong>System Status:</strong> <em>Connected to Flask Backend</em></p>
+          <p class="muted">The AI processing (EAR, MAR, Head Pose, Swin) is happening on the server.</p>
+        </div>
+      </section>
+
+      <aside class="demo-right">
+        <div class="card">
+          <h3>Live Logs</h3>
+          <div id="logAreaFat" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+            Ready.
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Example Images Gallery -->
+    <section class="fatigue-examples">
+      <h2>Detection Examples</h2>
+      <p class="lead">See how the system detects different states in real-time:</p>
+      
+      <div class="example-gallery">
+        <div class="example-card">
+          <div class="example-image-wrapper">
+            <img src="assets/fatigue photos/fatigue-active.jpeg" alt="Active state - Normal detection" class="example-img">
+            <div class="example-status status-active">Active</div>
+          </div>
+          <div class="example-info">
+            <h3>Normal State</h3>
+            <p class="muted">System actively monitoring with green bounding box. All metrics within normal range.</p>
+            <div class="example-metrics">
+              <span class="metric">AI: 0.05</span>
+              <span class="metric">EAR: 0.35</span>
+              <span class="metric">Score: 0.03</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <div class="example-image-wrapper">
+            <img src="assets/fatigue photos/fatigue-inactive.jpeg" alt="Warning state - Fatigue detected" class="example-img">
+            <div class="example-status status-warning">WARNING: FATIGUE</div>
+          </div>
+          <div class="example-info">
+            <h3>Fatigue Detected</h3>
+            <p class="muted">Red bounding box indicates fatigue warning. System detects drooping eyes and elevated fatigue score.</p>
+            <div class="example-metrics">
+              <span class="metric">AI: 0.67</span>
+              <span class="metric">Droop: 0.96</span>
+              <span class="metric score-high">Score: 0.60</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-card">
+          <div class="example-image-wrapper">
+            <img src="assets/fatigue photos/fatigue-cali.jpeg" alt="Calibrating state - System initialization" class="example-img">
+            <div class="example-status status-calibrating">CALIBRATING...</div>
+          </div>
+          <div class="example-info">
+            <h3>System Calibration</h3>
+            <p class="muted">Yellow bounding box shows calibration phase. System establishing baseline measurements.</p>
+            <div class="example-metrics">
+              <span class="metric">Progress: 35/45</span>
+              <span class="metric">Status: Initializing</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="mini-footer">SUT Project Demo</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Helmet Detection — SUT</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Favicon -->
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" href="assets/favicon.png" sizes="256x256">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="assets/site.webmanifest">
+
+</head>
+<body>
+    <div id="sidebarOverlay"></div>
+
+  <div class="page-simple">
+    <header class="mini-header">
+      <a href="index.html" class="back">← Home</a>
+      <h1>AI Helmet Detection</h1>
+    </header>
+
+    <main class="demo-area">
+      <section class="demo-left">
+        <h2>Live demo (frontend preview)</h2>
+        <p class="lead">This page demonstrates the UI for the helmet detection pipeline. To run real inference, replace the <code>simulateDetections</code> call in <code>app.js</code> with your model code (TensorFlow.js / ONNX / backend API).</p>
+
+        <div class="controls">
+          <label class="btn">Upload Image <input id="fileInput" type="file" accept="image/*" style="display:none"></label>
+          <button id="camBtn" class="btn">Use Camera</button>
+          <button id="runBtn" class="btn primary">Run Detection</button>
+          <button id="clearBtn" class="btn outline">Clear</button>
+        </div>
+
+        <div class="viewer card" id="viewerWrap">
+          <!-- Preview image (default) -->
+          <img id="preview" src="/mnt/data/Screenshot 2025-11-26 002551.png" alt="demo preview" class="preview-img">
+          <!-- Video for camera stream -->
+          <video id="video" autoplay playsinline style="display:none"></video>
+          <!-- Canvas overlay for boxes -->
+          <canvas id="overlay" class="overlay" aria-hidden="true"></canvas>
+        </div>
+
+        <div class="notes">
+          <p><strong>Model:</strong> <em>SUT El Sewedy University DataSet</em></p>
+          <p class="muted">Tip: Open your browser console for developer notes. Replace the simulated detector with your model for production.</p>
+        </div>
+      </section>
+
+      <aside class="demo-right">
+        <div class="card">
+          <h3>Detection Summary</h3>
+          <div class="stat"><span>Latest:</span><strong id="latest">—</strong></div>
+          <div class="stat"><span>Detections:</span><strong id="count">0</strong></div>
+          <div class="stat"><span>Model:</span><strong>SUT El Sewedy University DataSet</strong></div>
+        </div>
+
+        <div class="card logs">
+          <h4>Logs</h4>
+          <div id="logArea">No logs yet.</div>
+        </div>
+
+        <div class="card">
+          <h4>How to use</h4>
+          <ol>
+            <li>Upload an image or enable your camera.</li>
+            <li>Click <strong>Run Detection</strong> to simulate detections.</li>
+            <li>To integrate your model, edit <code>app.js</code> and replace <code>simulateDetections</code> with inference code that draws boxes on <code>#overlay</code>.</li>
+          </ol>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="mini-footer">This demo uses a simulated detector for UI purposes. For production, integrate your trained model and ensure privacy/compliance.</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
