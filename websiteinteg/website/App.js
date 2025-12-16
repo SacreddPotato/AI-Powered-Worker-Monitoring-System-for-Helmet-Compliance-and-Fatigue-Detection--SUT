@@ -91,6 +91,73 @@ function initFatiguePage(){
 }
 
 // =========================
+// Helmet Page Integration
+// =========================
+function initHelmetPage(){
+  const camBtn = safeGet('camHelmet');
+  const clearBtn = safeGet('clearHelmet');
+  const preview = safeGet('previewHelmet');    // The default placeholder image
+  const container = safeGet('viewerWrapHelmet'); // The container div
+  
+  // Check if we are viewing an uploaded video (from the URL query param)
+  const urlParams = new URLSearchParams(window.location.search);
+  const source = urlParams.get('source');
+
+  // Create or Find the Stream Image Element
+  let streamImg = document.getElementById('serverStreamHelmet');
+  if(!streamImg && container){
+      streamImg = document.createElement('img');
+      streamImg.id = 'serverStreamHelmet';
+      streamImg.style.width = '100%';
+      streamImg.style.display = 'none';
+      streamImg.style.borderRadius = '8px';
+      container.appendChild(streamImg);
+  }
+
+  // If a source exists in URL (e.g. after upload), start playing it immediately
+  if(source && streamImg) {
+      if(preview) preview.style.display = 'none';
+      streamImg.src = "/helmet_video_feed?source=" + encodeURIComponent(source);
+      streamImg.style.display = 'block';
+  }
+
+  // "Use Camera" Button Logic
+  if(camBtn){
+    camBtn.addEventListener('click', () => {
+       // 1. Hide the placeholder
+       if(preview) preview.style.display = 'none';
+       
+       // 2. Point the image to the Python helmet detection webcam feed
+       if(streamImg) {
+           // Add timestamp to prevent browser caching
+           streamImg.src = "/helmet_video_feed?source=0&t=" + new Date().getTime();
+           streamImg.style.display = 'block';
+       }
+       
+       const logArea = safeGet('logAreaHelmet');
+       if(logArea) logArea.innerHTML = `<div>${new Date().toLocaleTimeString()} - Helmet Detection Started</div>` + logArea.innerHTML;
+    });
+  }
+
+  // "Stop / Clear" Button Logic
+  if(clearBtn){
+      clearBtn.addEventListener('click', () => {
+          if(streamImg) {
+              streamImg.src = ""; // Cut the connection
+              streamImg.style.display = 'none';
+          }
+          if(preview) preview.style.display = 'block'; // Show placeholder
+          
+          // Clear URL params so refresh doesn't reload the video
+          window.history.pushState({}, document.title, window.location.pathname);
+          
+          const logArea = safeGet('logAreaHelmet');
+          if(logArea) logArea.innerHTML = `<div>${new Date().toLocaleTimeString()} - Detection Stopped</div>` + logArea.innerHTML;
+      });
+  }
+}
+
+// =========================
 // Features Slideshow
 // =========================
 function initFeaturesSlideshow(){
@@ -206,6 +273,7 @@ function initFeaturesSlideshow(){
 function init(){
   try{ initSidebar(); }catch(e){}
   try{ initFatiguePage(); }catch(e){}
+  try{ initHelmetPage(); }catch(e){}
   try{ initFeaturesSlideshow(); }catch(e){}
 }
 

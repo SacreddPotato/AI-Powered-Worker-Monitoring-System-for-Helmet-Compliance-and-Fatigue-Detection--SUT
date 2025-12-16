@@ -1,7 +1,9 @@
 import os
+import cv2
 from flask import Flask, render_template, Response, request, redirect, url_for
 from werkzeug.utils import secure_filename
 from camera import VideoCamera
+from ultralytics import YOLO
 
 # FIX: Point Flask to the 'website' folder for HTML, CSS, and JS
 app = Flask(__name__, template_folder='website', static_folder='website', static_url_path='')
@@ -9,6 +11,15 @@ app = Flask(__name__, template_folder='website', static_folder='website', static
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Load helmet detection model
+HELMET_MODEL_PATH = os.path.join(os.path.dirname(__file__), "AIHelmet", "best.pt")
+helmet_model = None
+if os.path.exists(HELMET_MODEL_PATH):
+    helmet_model = YOLO(HELMET_MODEL_PATH)
+    print(f"[INFO] Helmet model loaded from {HELMET_MODEL_PATH}")
+else:
+    print(f"[WARNING] Helmet model not found at {HELMET_MODEL_PATH}")
 
 # --- PAGE ROUTES ---
 @app.route('/')
@@ -69,6 +80,46 @@ def upload_video():
             # Redirect back to Fatigue page with the video source
             return redirect(url_for('fatigue', source=path))
     return redirect(url_for('fatigue'))
+
+# --- HELMET VIDEO STREAM LOGIC ---
+def gen_helmet(source):
+    video = cv2.VideoCapture(source)
+    while True:
+        success, frame = video.read()
+        if not success:
+            break
+        
+        if helmet_model is not None:
+            # Run YOLO inference
+            results = helmet_model(frame, conf=0.5, verbose=False)
+            frame = results[0].plot()
+        
+        ret, jpeg = cv2.imencode('.jpg', frame)
+        if ret:
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')
+    video.release()
+
+@app.route('/helmet_video_feed')
+def helmet_video_feed():
+    source = request.args.get('source', '0')
+    # If source is '0', use webcam. Otherwise use file path.
+    if source == '0':
+        return Response(gen_helmet(0), mimetype='multipart/x-mixed-replace; boundary=frame')
+    else:
+        return Response(gen_helmet(source), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# --- HELMET UPLOAD HANDLE ---
+@app.route('/upload_helmet_video', methods=['POST'])
+def upload_helmet_video():
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != '':
+            filename = secure_filename(file.filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            # Redirect back to Helmet page with the video source
+            return redirect(url_for('helmet', source=path))
+    return redirect(url_for('helmet'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
