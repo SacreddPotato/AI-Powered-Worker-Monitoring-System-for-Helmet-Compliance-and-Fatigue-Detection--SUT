@@ -1,2 +1,2 @@
-experimental/swin_best.pth filter=lfs diff=lfs merge=lfs -text
-experimental/*.dat filter=lfs diff=lfs merge=lfs -text
+websiteinteg/shape_predictor_68_face_landmarks.dat filter=lfs diff=lfs merge=lfs -text
+websiteinteg/swin_best.pth filter=lfs diff=lfs merge=lfs -text
