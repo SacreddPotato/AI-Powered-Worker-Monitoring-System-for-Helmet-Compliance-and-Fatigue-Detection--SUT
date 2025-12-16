@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SUT AI Helmet & Fatigue Detection</title>
+  <!-- Link to external CSS (create styles.css next) -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Favicon -->
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" href="assets/favicon.png" sizes="256x256">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="assets/site.webmanifest">
+
+</head>
+<body class="home-page">
+    <div id="sidebarOverlay"></div>
+
+  <div class="site">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <!-- Using the uploaded SUT logo image from local path -->
+        <img src="assets/sut.logo.png" class="logo" alt="SUT Logo">
+        <div class="brand-text">
+          <div class="univ">El Sewedy University</div>
+          <div class="proj">AI Helmet & Fatigue Detection — Project 1</div>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <a href="index.html" class="nav-link active">Home</a>
+        <a href="about.html" class="nav-link">About the Project</a>
+        <a href="helmet.html" class="nav-link">AI Helmet Detection</a>
+        <a href="fatigue.html" class="nav-link">Fatigue Detection</a>
+        <a href="faq.html" class="nav-link">FAQ</a>
+      </nav>
+
+      <div class="sidebar-cta">
+        <button id="contactBtn" class="btn">Contact Us</button>
+        <button id="demoBtn" class="btn outline">Request Demo</button>
+      </div>
+
+      <div class="side-footer">Student project • SUT El Sewedy University DataSet</div>
+    </aside>
+
+    <!-- Main area -->
+    <div class="main">
+      <header class="topbar">
+        <div class="top-left">
+          <button id="menuToggle" class="hamburger" aria-label="Toggle menu">☰</button>
+          <div class="title">AI Helmet & Fatigue Detection • SUT</div>
+        </div>
+        <div class="top-right">
+          <a href="contact.html" class="link">Contact</a>
+          <a href="demo.html" class="link primary">Request Demo</a>
+        </div>
+      </header>
+
+      <main class="content">
+        <!-- Slideshow Section - Top Half -->
+        <section class="features-slideshow">
+          <div class="slideshow-container">
+            <div class="slideshow-track">
+              <div class="slide" data-slide="0">
+                <div class="slide-image" style="background-image: url('assets/feature-realtime.jpeg');"></div>
+                <div class="slide-content">
+                  <h3>Real-time detection</h3>
+                  <p>Camera and upload modes. Exportable reports and alerts.</p>
+                </div>
+              </div>
+              
+              <div class="slide active" data-slide="1">
+                <div class="slide-image" style="background-image: url('assets/feature-safety.jpeg');"></div>
+                <div class="slide-content">
+                  <h3>Promote Workplace Safety</h3>
+                  <p>Dataset collected on-site with real-world conditions.</p>
+                </div>
+              </div>
+              
+              <div class="slide" data-slide="2">
+                <div class="slide-image" style="background-image: url('assets/feature-integration.jpeg');"></div>
+                <div class="slide-content">
+                  <h3>Easy Integration</h3>
+                  <p>API-ready, runs on edge devices or in the cloud.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div class="slideshow-controls">
+              <button class="slide-nav prev" aria-label="Previous slide">‹</button>
+              <button class="slide-nav next" aria-label="Next slide">›</button>
+            </div>
+            
+            <div class="slideshow-dots">
+              <button class="dot" data-slide="0" aria-label="Go to slide 1"></button>
+              <button class="dot active" data-slide="1" aria-label="Go to slide 2"></button>
+              <button class="dot" data-slide="2" aria-label="Go to slide 3"></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="hero">
+          <div class="hero-left">
+            <h1>AI Helmet & Fatigue Detection</h1>
+            <p class="lead">A prototype system trained on the <strong>SUT El Sewedy University DataSet</strong>. Built by students to provide on-campus safety monitoring, automated alerts and analytics.</p>
+
+            <div class="cta-row">
+              <a href="helmet.html" class="btn primary">Try Helmet Demo</a>
+              <a href="fatigue.html" class="btn">Try Fatigue Demo</a>
+              <a href="about.html" class="btn outline">About Project</a>
+            </div>
+          </div>
+
+          <div class="hero-right">
+            <div class="card preview">
+              <!-- design inspiration / color swatches (uploaded) -->
+              <img src="/mnt/data/Screenshot 2025-11-26 002551.png" alt="preview" class="preview-img">
+              <div class="preview-caption">Color & UI inspiration — SUT</div>
+            </div>
+
+            <div class="card journey">
+              <h3>Our Journey</h3>
+              <p>Students from El Sewedy University collaborated for this capstone. We prototyped detection models, curated the dataset, and built this demo site to present our work.</p>
+              <a href="about.html" class="link">Read more about our journey →</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="quick-links">
+          <a href="helmet.html" class="tile">
+            <img src="/mnt/data/Screenshot 2025-11-26 002541.png" alt="helmet" class="tile-img">
+            <div class="tile-text">Helmet Detection</div>
+          </a>
+          <a href="fatigue.html" class="tile">
+            <img src="/mnt/data/Screenshot 2025-11-26 002533.png" alt="fatigue" class="tile-img">
+            <div class="tile-text">Fatigue Detection</div>
+          </a>
+          <a href="faq.html" class="tile">
+            <div class="tile-text">FAQ</div>
+          </a>
+        </section>
+
+        <section class="partners">
+          <h3>Project Links (Previous Reports)</h3>
+          <ul>
+            <li><a href="#">University microsite redesign — UX/UI report</a></li>
+            <li><a href="#">Small object detection pipeline — research notes</a></li>
+            <li><a href="#">Edge deployment tests — field notes</a></li>
+          </ul>
+        </section>
+
+      </main>
+
+      <footer class="site-footer">
+        <div>© El Sewedy University — Student Project</div>
+        <div class="muted">For demo/pilot requests: <strong>projectHelmet@sut.edu.eg</strong></div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Link to main JS (create app.js next) -->
+  <script src="app.js"></script>
+</body>
+</html>
