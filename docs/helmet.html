@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Helmet Detection — SUT</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Favicon -->
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+<link rel="icon" type="image/png" href="assets/favicon.png" sizes="256x256">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="assets/site.webmanifest">
+
+</head>
+<body>
+    <div id="sidebarOverlay"></div>
+
+  <div class="page-simple">
+    <header class="mini-header">
+      <a href="index.html" class="back">← Home</a>
+      <h1>AI Helmet Detection</h1>
+    </header>
+
+    <main class="demo-area">
+      <section class="demo-left">
+        <h2>Helmet Detection (Live AI)</h2>
+        <p class="lead">This system uses YOLO to detect helmet compliance in real-time. Click <strong>Use Camera</strong> to start the Python backend stream.</p>
+
+        <div class="controls">
+          <form action="/upload_helmet_video" method="post" enctype="multipart/form-data" style="display:inline-block">
+            <label class="btn">Upload Video <input name="file" type="file" accept="video/*" style="display:none" onchange="this.form.submit()"></label>
+          </form>
+          <button id="camHelmet" class="btn primary">Use Camera</button>
+          <button id="clearHelmet" class="btn outline">Stop / Clear</button>
+        </div>
+
+        <div class="viewer card" id="viewerWrapHelmet" style="min-height: 400px; display: flex; align-items: center; justify-content: center; background: #000; position: relative;">
+          <img id="previewHelmet" src="assets/sut.logo.png" alt="preview" style="max-height: 300px; opacity: 0.5;">
+        </div>
+
+        <div class="notes">
+          <p><strong>System Status:</strong> <em>Connected to Flask Backend</em></p>
+          <p class="muted">The AI processing (YOLO Helmet Detection) is happening on the server.</p>
+        </div>
+      </section>
+
+      <aside class="demo-right">
+        <div class="card">
+          <h3>Detection Summary</h3>
+          <div class="stat"><span>Model:</span><strong>YOLO (SUT Dataset)</strong></div>
+          <div class="stat"><span>Classes:</span><strong>Helmet / No Helmet</strong></div>
+        </div>
+
+        <div class="card logs">
+          <h4>Live Logs</h4>
+          <div id="logAreaHelmet" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+            Ready.
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>How to use</h4>
+          <ol>
+            <li>Upload a video or enable your camera.</li>
+            <li>The system will automatically detect helmets.</li>
+            <li>Green boxes indicate proper helmet usage.</li>
+            <li>Red warnings indicate missing helmets.</li>
+          </ol>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="mini-footer">SUT Project Demo — Helmet Detection powered by YOLO</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
