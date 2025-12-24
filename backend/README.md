@@ -42,11 +42,20 @@ The following files should be present in this directory:
 
 ## Running the Application
 
+### Production Mode (Recommended)
 ```bash
 python app.py
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:5000` with debug mode disabled by default.
+
+### Development Mode (with auto-reload)
+```bash
+export FLASK_DEBUG=true  # On Windows: set FLASK_DEBUG=true
+python app.py
+```
+
+**⚠️ Security Note:** Never run with debug mode enabled in production environments.
 
 ## API Endpoints
 
