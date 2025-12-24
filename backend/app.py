@@ -123,4 +123,8 @@ def upload_helmet_video():
     return redirect(url_for('helmet'))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+    # Note: Set debug=False in production environments
+    # For development, you can set debug=True to enable auto-reload and detailed error pages
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode, threaded=True)
