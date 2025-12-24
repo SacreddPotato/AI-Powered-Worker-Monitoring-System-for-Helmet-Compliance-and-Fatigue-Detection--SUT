@@ -28,11 +28,6 @@ Thumbs.db
 backend/uploads/*
 !backend/uploads/.gitkeep
 
-# Large model files (too large for GitHub - use Git LFS or download separately)
-backend/*.dat
-backend/*.pth
-backend/AIHelmet/*.pt
-
 # Logs
 *.log
 
