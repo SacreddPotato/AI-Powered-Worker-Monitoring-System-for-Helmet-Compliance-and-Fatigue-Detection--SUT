@@ -1,5 +1,42 @@
 # Python cache
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
 
 # VS Code
 .vscode/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploads directory (user-uploaded videos)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Large model files (too large for GitHub - use Git LFS or download separately)
+backend/*.dat
+backend/*.pth
+backend/AIHelmet/*.pt
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

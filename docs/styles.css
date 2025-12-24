@@ -1,0 +1,974 @@
+/* styles.css — SUT-inspired theme for AI Helmet & Fatigue Detection site
+   - White background, cyan-purple accents tuned to SUT look
+   - Smooth micro-interactions, slide-in sidebar, responsive layout
+   - Replace logo/images with real assets in /assets/ or keep provided screenshots
+
+   Save as styles.css in the same folder as the HTML files.
+*/
+
+
+:root{
+  /* Primary palette (change these if you want exact hex from screenshots) */
+  --bg: #ffffff;
+  --text: #0b1220;
+  --muted: #6b7280;
+  --accent: #0fa2b1;   /* cyan-ish (SUT-like) */
+  --accent-2: #5c3b7a; /* purple accent */
+  --card: #ffffff;
+  --glass: rgba(11,18,32,0.04);
+  --shadow: 0 10px 30px rgba(12,18,30,0.06);
+  --radius: 12px;
+  --max-width: 1200px;
+  --ease: cubic-bezier(.2,.9,.3,1);
+}
+
+
+
+/* Base resets */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,'Segoe UI',Roboto,'Helvetica Neue',Arial;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+
+/* Layout */
+.site{display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{
+  width:280px;
+  padding:24px;
+  border-right:1px solid #eef2f8;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.98));
+  transition:transform 360ms var(--ease), box-shadow 360ms var(--ease);
+}
+
+/* Make all logos bigger (sidebar, about, mini) */
+img.logo,
+.about-logo,
+.mini-logo {
+  width: 150px;    /* change this number to make it larger/smaller */
+  height: auto;    /* keep aspect ratio */
+  object-fit: contain;
+  display: inline-block;
+}
+
+/* If you want the logo centered in the header or brand area */
+.brand { align-items: center; }
+
+/* Mobile: scale down so layout doesn't break on small screens */
+@media (max-width: 980px) {
+  img.logo,
+  .about-logo,
+  .mini-logo {
+    width: 96px;   /* mobile size */
+  }
+
+  /* If sidebar is hidden on mobile, ensure topbar logo still fits */
+  .top-left .logo { width: 96px; }
+}
+
+
+.brand{display:flex;gap:14px;align-items:center}
+.logo{width:64px;height:64px;object-fit:contain;border-radius:10px}
+.brand-text .univ{font-weight:700;color:var(--accent-2);font-size:16px}
+.brand-text .proj{font-size:13px;color:var(--muted)}
+
+.side-nav{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.nav-link{display:block;padding:10px 12px;border-radius:10px;color:var(--muted);font-weight:600}
+/* Normal: solid blue */
+.nav-link {
+  background: var(--accent);       /* blue */
+  color: #fff;
+}
+
+/* Hover: turns purple */
+.nav-link:hover {
+  background: var(--accent-2);     /* purple */
+  color:#fff;
+  transform: translateX(6px);
+}
+
+/* Active link stays purple */
+.nav-link.active {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.nav-link.active{background:linear-gradient(90deg,var(--accent-2),var(--accent));color:#fff;box-shadow:var(--shadow)}
+
+.sidebar-cta{display:flex;flex-direction:column;gap:8px}
+.btn{padding:10px 12px;border-radius:10px;border:1px solid rgba(11,18,32,0.04);background:transparent;cursor:pointer;font-weight:600}
+.btn.primary {
+  background: var(--accent);   /* blue */
+  color: #fff;
+  border: 0;
+}
+
+.btn.primary:hover {
+  background: var(--accent-2); /* purple */
+}
+
+.btn.outline{border:1px solid var(--accent);color:var(--accent)}
+.side-footer{margin-top:auto;color:var(--muted);font-size:13px}
+
+/* Main content */
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 28px;border-bottom:1px solid #f2f6fb}
+.top-left{display:flex;align-items:center;gap:12px}
+.hamburger{font-size:18px;background:transparent;border:0;cursor:pointer;padding:8px;border-radius:8px}
+.title{font-weight:700}
+.top-right{display:flex;align-items:center;gap:10px}
+.link{color:var(--muted);padding:8px;border-radius:8px}
+.link.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff}
+
+.content{padding:28px;max-width:var(--max-width);margin:0 auto}
+
+/* Hero */
+.hero{display:grid;grid-template-columns:1fr 420px;gap:26px;align-items:start}
+.lead{color:var(--muted);line-height:1.6}
+.cta-row{display:flex;gap:12px;margin:18px 0}
+.features{display:flex;gap:14px;margin-top:12px}
+.features article{background:var(--card);padding:14px;border-radius:12px;box-shadow:var(--shadow);flex:1}
+
+.card{background:var(--card);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+.preview-img{width:100%;height:180px;object-fit:cover;border-radius:10px}
+.preview-caption{font-size:13px;color:var(--muted);margin-top:8px}
+
+.quick-links{display:flex;gap:12px;margin-top:18px}
+.tile{flex:1;background:var(--card);border-radius:12px;padding:14px;text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);min-height:84px}
+.tile-img{width:96px;height:72px;object-fit:cover;border-radius:8px}
+.tile-text{font-weight:700}
+
+.partners{margin-top:22px}
+.site-footer{padding:18px 28px;border-top:1px solid #f2f6fb;display:flex;justify-content:space-between}
+.muted{color:var(--muted)}
+
+/* Simple pages */
+.page-simple{padding:26px}
+.mini-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.back{text-decoration:none;color:var(--accent-2);font-weight:600}
+.demo-area{display:flex;gap:18px}
+.demo-left{flex:1}
+.demo-right{width:340px}
+.viewer{position:relative;display:flex;align-items:center;justify-content:center;min-height:320px;border-radius:12px;overflow:hidden}
+.preview-img{border-radius:8px}
+.overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.logs{max-height:220px;overflow:auto}
+.mini-footer{margin-top:12px;color:var(--muted)}
+
+/* About page specifics */
+.about-page .about-logo{width:84px;height:84px;object-fit:contain;border-radius:10px}
+.about-content{display:flex;flex-direction:column;gap:14px}
+.univ-header{display:flex;gap:14px;align-items:center}
+
+/* FAQ */
+.faq-area{display:flex;gap:18px}
+.faq-questions{width:300px}
+.faq-questions ul{list-style:none;padding:0;margin:0}
+.question{padding:14px;border-radius:10px;cursor:pointer;border:1px solid #f3f6f9;background:transparent}
+.question:hover {
+  background: var(--accent-2); /* purple */
+  color:#fff;
+  transform:translateX(8px)
+}
+
+.faq-answer{flex:1;padding:16px}
+
+/* Forms */
+.card.demo-form{max-width:720px}
+.row{display:flex;flex-direction:column;margin-bottom:10px}
+input[type="text"],input[type="email"],input[type="tel"],textarea{padding:10px;border-radius:8px;border:1px solid #eef2f8}
+.form-actions{display:flex;gap:10px;margin-top:8px}
+.message{padding:10px;border-radius:8px}
+.hidden{display:none}
+
+/* Micro-interactions */
+*{transition:all 320ms var(--ease)}
+.nav-link, .btn, .question{transition:transform 260ms var(--ease), box-shadow 260ms}
+.tile:hover{transform:translateY(-8px)}
+.card:hover{transform:translateY(-8px)}
+
+/* Responsive */
+@media (max-width:980px){
+  .sidebar{display:none}
+  .hero{grid-template-columns:1fr}
+  .demo-area{flex-direction:column}
+  .preview-img{height:auto}
+}
+
+/* Small animation utilities */
+.fade-in{animation:fadeIn 640ms var(--ease)}
+.slide-up{animation:slideUp 520ms var(--ease)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* Accessibility tweaks */
+button, a, input, select, textarea{outline-color:var(--accent)}
+
+/* End of styles */
+/* --- Sidebar (replace previous rules) --- */
+/* Sidebar is a flex child; we animate width/flex-basis so it doesn't leave empty space */
+.sidebar {
+  position:relative;
+  z-index: 10;
+  width: 280px;           /* default visible width */
+  flex: 0 0 280px;        /* ensures it occupies 280px in layout */
+  padding: 24px;
+  border-right: 1px solid #eef2f8;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.98));
+  transition: flex-basis 360ms var(--ease), width 360ms var(--ease), padding 260ms var(--ease), opacity 260ms var(--ease), transform 360ms var(--ease);
+}
+
+/* closed: collapse width and padding so it no longer occupies space */
+.sidebar.closed {
+  width: 0 !important;
+  flex: 0 0 0 !important;    /* collapse flex space */
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  border-right: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateX(-6px);
+  pointer-events: none;      /* disable interactions */
+}
+
+/* On small screens the overlay shows and sidebar floats above content */
+@media (max-width: 980px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    background: #fff;
+    box-shadow: 0 12px 40px rgba(2,6,23,0.12);
+  }
+  .sidebar.closed {
+    transform: translateX(-100%);
+  }
+}
+
+/* overlay - keep as before */
+#sidebarOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(2px);
+  z-index: 9;
+}
+#sidebarOverlay.active { display: block; }
+/* ----------------------------
+   Hover glow + scale animations
+   (Add this at the end of styles.css)
+   ---------------------------- */
+
+/* Apply smooth transitions to the interactive elements */
+.nav-link,
+.btn.primary,
+.tile,
+.card,
+.question {
+  /* only add transitions; do not alter layout */
+  transition: transform 260ms var(--ease),
+              box-shadow 260ms var(--ease),
+              background 220ms var(--ease),
+              filter 220ms var(--ease);
+  will-change: transform, box-shadow, background;
+}
+
+/* Hover state: lift, grow slightly, and glow */
+.nav-link:hover,
+.btn.primary:hover,
+.tile:hover,
+.card:hover,
+.question:hover {
+  transform: translateY(-6px) scale(1.03);
+  /* subtle purple glow on hover (accent-2) plus soft shadow for depth */
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.10),
+    0 12px 40px rgba(92,59,122,0.12),      /* bigger soft purple shadow */
+    0 0 22px rgba(92,59,122,0.08);         /* colored glow halo */
+  filter: saturate(1.02);
+}
+
+/* Make the primary button glow with the accent color when hovered (blue -> purple) */
+.btn.primary:hover {
+  /* stronger colored halo using accent-2 */
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.08),
+    0 10px 30px rgba(92,59,122,0.14),
+    0 0 28px rgba(92,59,122,0.1);
+}
+
+/* Nav link specific - maintain the horizontal translate on hover */
+.nav-link:hover {
+  transform: translateX(8px) translateY(-3px) scale(1.02);
+}
+
+/* Slightly smaller effect on mobile to avoid layout issues */
+@media (max-width: 480px) {
+  .nav-link:hover,
+  .btn.primary:hover,
+  .tile:hover,
+  .card:hover,
+  .question:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+  }
+}
+/* ------------------------------------
+   Hover animation for header buttons
+   (.link and .link.primary)
+   ------------------------------------ */
+
+/* Smooth animation base */
+.link,
+.link.primary {
+  transition: transform 260ms var(--ease),
+              box-shadow 260ms var(--ease),
+              background 220ms var(--ease),
+              color 180ms var(--ease);
+  will-change: transform, box-shadow, background;
+}
+
+/* Normal button colors */
+.link {
+  background: #f7f9fc;
+  color: var(--muted);
+}
+
+.link.primary {
+  background: var(--accent); /* blue */
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+}
+
+/* Hover glow + lift */
+.link:hover,
+.link.primary:hover {
+  transform: translateY(-4px) scale(1.03);
+  color: #fff;
+  background: var(--accent-2);  /* purple */
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.10),
+    0 10px 30px rgba(92,59,122,0.15),
+    0 0 20px rgba(92,59,122,0.12);
+}
+
+/* === Force solid blue for .link.primary and purple on hover ===
+   Put this at the BOTTOM of styles.css and then hard-refresh the page.
+*/
+header .top-right .link.primary,
+.link.primary,
+a.link.primary {
+  background: var(--accent) !important;        /* solid blue */
+  background-image: none !important;           /* remove any gradient */
+  color: #fff !important;
+  border-radius: 10px;
+  padding: 8px 14px;
+  transition: background 220ms var(--ease), transform 260ms var(--ease), box-shadow 260ms var(--ease);
+  box-shadow: none !important;
+}
+
+/* Hover (purple + glow) */
+header .top-right .link.primary:hover,
+.link.primary:hover,
+a.link.primary:hover {
+  background: var(--accent-2) !important;      /* solid purple */
+  transform: translateY(-4px) scale(1.03) !important;
+  color: #fff !important;
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.10),
+    0 10px 30px rgba(92,59,122,0.15),
+    0 0 20px rgba(92,59,122,0.12) !important;
+}
+/* ----------------------------------------
+   Feature Box Color Animations (Home Page)
+   Orange / Blue / Purple themed
+   ---------------------------------------- */
+
+/* Base styling for all three */
+.feature-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  transition: background 260ms var(--ease), 
+              color 260ms var(--ease),
+              transform 260ms var(--ease),
+              box-shadow 260ms var(--ease);
+  cursor: pointer;
+}
+
+/* Text colors for each card */
+.feature-card.orange h3 { color: #ff784e; }   /* SUT orange */
+.feature-card.orange p { color: #ff784e; }
+
+.feature-card.blue h3 { color: var(--accent); }   /* SUT blue */
+.feature-card.blue p { color: var(--accent); }
+
+.feature-card.purple h3 { color: var(--accent-2); } /* SUT purple */
+.feature-card.purple p { color: var(--accent-2); }
+
+/* Hover states: box turns full color + text becomes white */
+.feature-card.orange:hover {
+  background: #ff784e;
+  color: #fff;
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 10px 30px rgba(255, 120, 78, 0.25);
+}
+
+.feature-card.blue:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 10px 30px rgba(15, 162, 177, 0.25);
+}
+
+.feature-card.purple:hover {
+  background: var(--accent-2);
+  color: #fff;
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 10px 30px rgba(92, 59, 122, 0.25);
+}
+
+/* Ensure text inside also turns white on hover */
+.feature-card:hover h3,
+.feature-card:hover p {
+  color: #fff !important;
+}
+/* ----------------------------------------
+   Feature Box Colored Outlines
+   ---------------------------------------- */
+
+/* Default outlines matching each theme color */
+.feature-card.orange {
+  border: 2px solid #ff784e;
+}
+
+.feature-card.blue {
+  border: 2px solid var(--accent);     /* SUT blue */
+}
+
+.feature-card.purple {
+  border: 2px solid var(--accent-2);   /* SUT purple */
+}
+
+/* Hover: outline becomes transparent since the background becomes solid */
+.feature-card.orange:hover,
+.feature-card.blue:hover,
+.feature-card.purple:hover {
+  border-color: transparent;
+}
+/* ----------------------------------------
+   HOME PAGE: Vertically stacked sections
+   ---------------------------------------- */
+
+/* Make homepage content stacked instead of side-by-side */
+.home-page .content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;     /* space between sections */
+}
+
+/* ----------------------------------------
+   Features Slideshow - Top Half of Page
+   ---------------------------------------- */
+
+.features-slideshow {
+  width: 100%;
+  height: 50vh; /* Takes up top half of viewport */
+  min-height: 500px;
+  max-height: 700px;
+  margin: 0;
+  margin-bottom: 40px;
+  position: relative;
+  padding: 0;
+}
+
+.slideshow-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--card);
+}
+
+.slideshow-track {
+  display: flex;
+  height: 100%;
+  transition: transform 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.slide {
+  min-width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  opacity: 0.5;
+  transform: scale(0.9);
+  transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+}
+
+.slide.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.slide-image {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform 600ms var(--ease);
+}
+
+.slide.active .slide-image {
+  transform: scale(1.05);
+}
+
+.slide-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 48px 40px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.4), transparent);
+  color: #fff;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 500ms var(--ease), opacity 500ms var(--ease);
+  transition-delay: 200ms;
+}
+
+.slide.active .slide-content {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.slide-content h3 {
+  margin: 0 0 12px 0;
+  font-size: 2.5em;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.slide-content p {
+  margin: 0;
+  font-size: 1.2em;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+/* Color overlays for each slide */
+.slide[data-slide="0"] .slide-content {
+  background: linear-gradient(to top, rgba(255, 120, 78, 0.9), rgba(255, 120, 78, 0.5), transparent);
+}
+
+.slide[data-slide="1"] .slide-content {
+  background: linear-gradient(to top, rgba(15, 162, 177, 0.9), rgba(15, 162, 177, 0.5), transparent);
+}
+
+.slide[data-slide="2"] .slide-content {
+  background: linear-gradient(to top, rgba(92, 59, 122, 0.9), rgba(92, 59, 122, 0.5), transparent);
+}
+
+.slideshow-controls {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 12px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.slide-nav {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  font-size: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  transition: all 260ms var(--ease);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.slide-nav:hover {
+  background: #fff;
+  transform: scale(1.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.slide-nav:active {
+  transform: scale(0.95);
+}
+
+.slideshow-dots {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  z-index: 10;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: transparent;
+  cursor: pointer;
+  transition: all 300ms var(--ease);
+  padding: 0;
+}
+
+.dot:hover {
+  background: rgba(255, 255, 255, 0.6);
+  transform: scale(1.3);
+}
+
+.dot.active {
+  background: #fff;
+  width: 32px;
+  border-radius: 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 980px) {
+  .features-slideshow {
+    height: 45vh;
+    min-height: 400px;
+    max-height: 600px;
+  }
+  
+  .slide-content {
+    padding: 32px 24px;
+  }
+  
+  .slide-content h3 {
+    font-size: 2em;
+  }
+  
+  .slide-content p {
+    font-size: 1em;
+  }
+  
+  .slide-nav {
+    width: 50px;
+    height: 50px;
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .features-slideshow {
+    height: 40vh;
+    min-height: 350px;
+    max-height: 500px;
+  }
+  
+  .slide-content {
+    padding: 24px 20px;
+  }
+  
+  .slide-content h3 {
+    font-size: 1.5em;
+  }
+  
+  .slide-content p {
+    font-size: 0.9em;
+  }
+  
+  .slide-nav {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+  }
+  
+  .dot {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .dot.active {
+    width: 24px;
+  }
+}
+
+/* Stack helmet / fatigue / faq tiles vertically */
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Stack the right-side info card under the header section */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* Global big text color */
+h1, h2, h3, h4, h5, h6,
+strong, b,
+.title {
+  color: #0B3446 !important;
+}
+
+/* Exclude feature boxes (restore their theme colors) */
+.feature-card.orange h3 { color: #ff784e !important; }
+.feature-card.orange p { color: #ff784e !important; }
+
+.feature-card.blue h3 { color: var(--accent) !important; }
+.feature-card.blue p { color: var(--accent) !important; }
+
+.feature-card.purple h3 { color: var(--accent-2) !important; }
+.feature-card.purple p { color: var(--accent-2) !important; }
+
+/* Force feature-card text to turn white on hover (overrides global heading color) */
+.feature-card.orange:hover h3,
+.feature-card.orange:hover p,
+.feature-card.blue:hover h3,
+.feature-card.blue:hover p,
+.feature-card.purple:hover h3,
+.feature-card.purple:hover p {
+  color: #ffffff !important;
+}
+
+/* Also keep the small text/desc inside white on hover (if nested spans etc.) */
+.feature-card.orange:hover * ,
+.feature-card.blue:hover * ,
+.feature-card.purple:hover * {
+  color: #ffffff !important;
+}
+
+/* Make sure the transition is smooth */
+.feature-card h3,
+.feature-card p {
+  transition: color 220ms var(--ease);
+}
+
+/* ----------------------------------------
+   Home Page Background Image
+   ---------------------------------------- */
+
+/* Add subtle background image only to home page */
+.home-page {
+  position: relative;
+}
+
+.home-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('assets/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  opacity: 0.15; /* Make it faint - adjust this value (0.1-0.3) to make it more/less visible */
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Ensure content stays readable with white overlay */
+.home-page .site {
+  position: relative;
+  z-index: 1;
+}
+
+/* Add a subtle white overlay to the background for better readability */
+.home-page::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.7); /* White overlay to make background even more subtle */
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ----------------------------------------
+   Fatigue Detection Examples Gallery
+   ---------------------------------------- */
+
+.fatigue-examples {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid #eef2f8;
+}
+
+.fatigue-examples h2 {
+  margin-bottom: 12px;
+  color: #0B3446;
+}
+
+.fatigue-examples > .lead {
+  margin-bottom: 28px;
+  color: var(--muted);
+}
+
+.example-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.example-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: transform 260ms var(--ease), box-shadow 260ms var(--ease);
+}
+
+.example-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(12, 18, 30, 0.12);
+}
+
+.example-image-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.example-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.example-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.status-active {
+  background: #10b981;
+  color: #fff;
+}
+
+.status-warning {
+  background: #ef4444;
+  color: #fff;
+}
+
+.status-calibrating {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.example-info {
+  padding: 18px;
+}
+
+.example-info h3 {
+  margin: 0 0 8px 0;
+  color: #0B3446;
+  font-size: 1.1em;
+}
+
+.example-info p {
+  margin: 0 0 12px 0;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.example-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.metric {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f7f9fc;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-family: monospace;
+  color: var(--muted);
+  border: 1px solid #eef2f8;
+}
+
+.metric.score-high {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+  font-weight: 600;
+}
+
+/* Responsive adjustments for example gallery */
+@media (max-width: 980px) {
+  .example-gallery {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .fatigue-examples {
+    margin-top: 32px;
+    padding-top: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .example-card:hover {
+    transform: translateY(-3px) scale(1.01);
+  }
+  
+  .example-status {
+    font-size: 0.75em;
+    padding: 4px 8px;
+  }
+}
