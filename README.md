@@ -1,3 +1,13 @@
+---
+title: AI Worker Safety Monitor
+emoji: 👷
+colorFrom: yellow
+colorTo: red
+sdk: docker
+pinned: false
+license: mit
+---
+
 # 👷 AI-Powered Worker Monitoring System
 ### Helmet Compliance & Fatigue Detection
 
