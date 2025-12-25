@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>About Us — Project Team</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+</head>
+<body>
+    <div id="sidebarOverlay"></div>
+  <div class="page-simple about-page">
+    <header class="mini-header">
+      <a href="index.html" class="back">← Home</a>
+      <h1>About the Team</h1>
+    </header>
+
+    <main class="about-content card">
+      <section class="university-overview">
+        <div class="univ-header">
+          <img src="assets/sut.logo.png" alt="Logo" class="about-logo">
+          <div>
+            <h2>Graduation Project Team</h2>
+            <p class="muted">A collaboration of 6 students specializing in AI and Computer Vision.</p>
+          </div>
+        </div>
+
+        <div class="univ-body">
+          <p>This system was designed and implemented as our second year capstone project. Our goal was to create an automated, non-intrusive safety monitoring solution that could be deployed in industrial environments.</p>
+        </div>
+      </section>
+
+      <section class="project-story">
+        <h3>Technical Implementation</h3>
+        <p>Unlike standard off-the-shelf solutions, We are aiming to build our own pipelines to ensure accuracy in challenging conditions.</p>
+
+        <h4>Our Contributions</h4>
+        <ul>
+          <li><strong>Architecture:</strong> We integrated YOLOv8 for object detection with a Swin Transformer backbone for complex fatigue analysis.</li>
+          <li><strong>Full Stack:</strong> The team handled everything from the Python/Flask backend and Model training to this frontend demo dashboard.</li>
+        </ul>
+      </section>
+
+      <section class="team">
+        <h3>The Team</h3>
+        <p>We are a group of 8 passionate developers and engineers:</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; color: var(--muted);">
+           <div>• Backend Pipeline:<span>  Omar Diab & Omar Saad</span></div>
+           <div>• Frontend & UI/UX:<span>  Shaza Alaa & Battol Mohamed</span></div>
+           <div>• Model Training & Optimization:<span>  Ahmed Baher & Haneed Ahmed</span></div>
+        </div>
+      </section>
+
+      <section class="ethics">
+        <h3>Project Status</h3>
+        <p>This is a working prototype. While the results are promising, it is designed for demonstration and academic evaluation purposes.</p>
+      </section>
+
+    </main>
+
+    <footer class="mini-footer">Student Project • 2024-2025</footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
