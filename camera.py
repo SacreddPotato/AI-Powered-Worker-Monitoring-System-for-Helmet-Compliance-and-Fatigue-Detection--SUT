@@ -10,17 +10,15 @@ from PIL import Image
 from collections import deque
 import torchvision.models as models
 import torch.nn as nn
+from huggingface_hub import hf_hub_download # <--- Critical Import
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PREDICTOR_PATH = os.path.join(BASE_DIR, "shape_predictor_68_face_landmarks.dat")
-MODEL_PATH = os.path.join(BASE_DIR, "swin_best.pth")
 
 # --- 3D MODEL POINTS (using 6 stable landmarks) ---
-# Nose tip, Chin, Left eye corner, Right eye corner, Left mouth corner, Right mouth corner
 MODEL_POINTS_3D = np.array([
     (0.0, 0.0, 0.0),             # Nose tip (30)
-    (0.0, -63.6, -12.5),         # Chin (8) - scaled down for better accuracy
+    (0.0, -63.6, -12.5),         # Chin (8)
     (-43.3, 32.7, -26.0),        # Left eye left corner (36)
     (43.3, 32.7, -26.0),         # Right eye right corner (45)
     (-28.9, -28.9, -24.1),       # Left mouth corner (48)
@@ -33,7 +31,6 @@ def get_head_pose(shape, img_h, img_w):
         shape[30], shape[8], shape[36], shape[45], shape[48], shape[54]
     ], dtype="double")
     
-    # Better focal length estimation (typical webcam FOV ~60 degrees)
     focal_length = img_w / (2 * np.tan(np.radians(30)))
     center = (img_w / 2, img_h / 2)
     camera_matrix = np.array([
@@ -52,7 +49,6 @@ def get_head_pose(shape, img_h, img_w):
     rmat, _ = cv2.Rodrigues(rotation_vector)
     angles, _, _, _, _, _ = cv2.RQDecomp3x3(rmat)
     
-    # Clamp angles to reasonable range (-45 to 45 degrees for normal head movement)
     pitch = np.clip(angles[0], -45, 45)
     yaw = np.clip(angles[1], -45, 45)
     roll = np.clip(angles[2], -45, 45)
@@ -81,17 +77,20 @@ class VideoCamera(object):
         self.model.head = nn.Sequential(
             nn.Dropout(p=0.5), nn.Linear(in_features=768, out_features=1, bias=True))
         
-        if os.path.exists(MODEL_PATH):
-            try:
-                self.model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device), strict=False)
-                print(f"[INFO] Model loaded from {MODEL_PATH}")
-            except Exception as e: print(f"[ERROR] Failed to load model: {e}")
-        else:
-            parent_path = os.path.join(BASE_DIR, "../saved_models/SwinTrans/swin_best.pth")
-            if os.path.exists(parent_path):
-                self.model.load_state_dict(torch.load(parent_path, map_location=self.device), strict=False)
-                print(f"[INFO] Found model in parent directory")
-            else: print(f"[WARNING] Model not found. Using random weights!")
+        # --- FIX 1: LOAD SWIN MODEL FROM HUB ---
+        print("[INFO] Downloading/Loading Swin Model from Hugging Face Hub...")
+        try:
+            # We use 'weights/swin_best.pth' because that's where you uploaded it
+            swin_path = hf_hub_download(
+                repo_id="SacreddPotato/worker-monitoring-system", 
+                filename="weights/swin_best.pth", 
+                repo_type="space"
+            )
+            self.model.load_state_dict(torch.load(swin_path, map_location=self.device), strict=False)
+            print(f"[INFO] Swin Model loaded successfully from {swin_path}")
+        except Exception as e:
+            print(f"[ERROR] Failed to download/load Swin Model: {e}")
+            # Fallback logic removed because on Spaces we MUST rely on the Hub download
             
         self.model.to(self.device)
         self.model.eval()
@@ -101,24 +100,31 @@ class VideoCamera(object):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
         self.detector = dlib.get_frontal_face_detector()
-        try: self.predictor = dlib.shape_predictor(PREDICTOR_PATH)
-        except: 
-            parent_pred = os.path.join(BASE_DIR, "../shape_predictor_68_face_landmarks.dat")
-            if os.path.exists(parent_pred): self.predictor = dlib.shape_predictor(parent_pred)
-            else: print("CRITICAL: Shape predictor not found!")
+
+        # --- FIX 2: LOAD DLIB PREDICTOR FROM HUB ---
+        print("[INFO] Downloading/Loading Dlib Predictor from Hugging Face Hub...")
+        try:
+            dlib_path = hf_hub_download(
+                repo_id="SacreddPotato/worker-monitoring-system", 
+                filename="shape_predictor_68_face_landmarks.dat", 
+                repo_type="space"
+            )
+            self.predictor = dlib.shape_predictor(dlib_path)
+            print(f"[INFO] Dlib Predictor loaded from {dlib_path}")
+        except Exception as e: 
+            print(f"[CRITICAL ERROR] Could not load Dlib Predictor: {e}")
+            self.predictor = None
 
         self.is_calibrating, self.calibration_frames, self.calibration_limit = True, 0, 45
         self.ear_readings, self.mar_readings, self.pitch_readings, self.roll_readings = [], [], [], []
         
-        # Resting EAR baseline
         self.RESTING_EAR = 0.30 
         self.EYE_AR_THRESH, self.MOUTH_AR_THRESH, self.RESTING_PITCH, self.RESTING_ROLL, self.HEAD_THRESH = 0.25, 0.60, 0.0, 0.0, 25.0
         
-        # Smoothing buffers for head pose (reduces noise/spikes)
         self.pitch_buffer = deque(maxlen=10)
         self.roll_buffer = deque(maxlen=10)
-        
         self.prediction_buffer = deque(maxlen=30)
+        
         (self.lStart, self.lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
         (self.rStart, self.rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
         self.mStart, self.mEnd = (60, 68)
@@ -134,7 +140,7 @@ class VideoCamera(object):
         rects = self.detector(gray, 0)
         status, color = "Scanning...", (0, 255, 0)
         
-        if len(rects) > 0:
+        if len(rects) > 0 and self.predictor is not None:
             rect = rects[0]
             shape = self.predictor(gray, rect)
             shape = face_utils.shape_to_np(shape)
@@ -173,7 +179,6 @@ class VideoCamera(object):
                 
                 avg_prob = sum(self.prediction_buffer)/len(self.prediction_buffer) if self.prediction_buffer else 0.5
                 
-                # Apply smoothing to head pose using median filter
                 self.pitch_buffer.append(pitch)
                 self.roll_buffer.append(roll)
                 smoothed_pitch = np.median(list(self.pitch_buffer))
@@ -182,17 +187,12 @@ class VideoCamera(object):
                 pitch_diff = abs(smoothed_pitch - self.RESTING_PITCH)
                 roll_diff = abs(smoothed_roll - self.RESTING_ROLL)
                 
-                # Only count pitch (nodding), not roll (side tilt) - more reliable for drowsiness
-                # Ignore extreme tilts (> 40 degrees) as they're likely errors
                 if pitch_diff > 40:
-                    head_score = 0.0  # Treat as invalid/extreme reading
+                    head_score = 0.0
                 else:
                     head_score = 1.0 if pitch_diff > self.HEAD_THRESH else 0.0
 
-                # --- FIX: Calculate Droop Score BEFORE decision logic ---
-                # So it is available for display even if Eyes Closed trigger fires
                 droop_denom = (self.RESTING_EAR - self.EYE_AR_THRESH)
-                # Avoid division by zero if resting ear is somehow same as thresh
                 if droop_denom == 0: droop_denom = 0.001
                 
                 droop_score = (self.RESTING_EAR - ear) / droop_denom
@@ -200,11 +200,10 @@ class VideoCamera(object):
 
                 if ear < self.EYE_AR_THRESH:
                     score, reason = 1.0, "EYES CLOSED"
-                    droop_score = 1.0 # Force max droop for display
+                    droop_score = 1.0
                 elif head_score > 0.5:
                     score, reason = 1.0, "HEAD NOD/TILT"
                 else:
-                    # Formula: AI(60%) + Droop(20%) + Yawn(20%)
                     mar_score = 1.0 if mar > self.MOUTH_AR_THRESH else 0.0
                     score = (avg_prob * 0.6) + (droop_score * 0.3) + (mar_score * 0.1)
                     reason = "FATIGUE" if score > 0.5 else "Active"
@@ -214,17 +213,13 @@ class VideoCamera(object):
 
                 cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
                 
-                # Draw semi-transparent background for metrics
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (5, 5), (280, 155), (0, 0, 0), -1)
                 cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
                 
                 cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
                 cv2.putText(frame, f"AI: {avg_prob:.2f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-                
-                # Now this variable is guaranteed to exist
                 cv2.putText(frame, f"Droop: {droop_score:.2f} (EAR: {ear:.2f})", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-                
                 cv2.putText(frame, f"MAR: {mar:.2f}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
                 cv2.putText(frame, f"Score: {score:.2f}", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
                 

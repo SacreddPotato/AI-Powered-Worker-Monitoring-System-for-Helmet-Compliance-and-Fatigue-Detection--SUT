@@ -1,5 +1,2 @@
-templates/assets/fatigue[[:space:]]photos/fatigue-active.jpeg filter=lfs diff=lfs merge=lfs -text
-templates/assets/fatigue[[:space:]]photos/fatigue-inactive.jpeg filter=lfs diff=lfs merge=lfs -text
 *.pth filter=lfs diff=lfs merge=lfs -text
-*.dat filter=lfs diff=lfs merge=lfs -text
-*.pt filter=lfs diff=lfs merge=lfs -text
+shape_predictor_68_face_landmarks.dat filter=lfs diff=lfs merge=lfs -text

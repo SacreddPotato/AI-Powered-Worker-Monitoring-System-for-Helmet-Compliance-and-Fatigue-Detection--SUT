@@ -1,10 +1,11 @@
 flask
 opencv-python-headless
-ultralytics
 dlib
 torch
 torchvision
-numpy
-scipy
+ultralytics
+huggingface_hub
 imutils
+scipy
 Pillow
+numpy
