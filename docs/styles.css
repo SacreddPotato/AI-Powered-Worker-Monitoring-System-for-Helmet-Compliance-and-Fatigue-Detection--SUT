@@ -160,9 +160,9 @@ img.logo, .about-logo, .mini-logo { width: 150px; height: auto; object-fit: cont
 .faq-questions{width:300px}
 .faq-questions ul{list-style:none;padding:0;margin:0}
 .question{padding:14px;border-radius:10px;cursor:pointer;border:1px solid #f3f6f9;background:transparent; transition: all 200ms ease;}
-.question:hover { background: var(--accent-2); color:#fff; }
+.question:hover { background: var(--accent-2) !important; color:#fff !important; }
 .question.active { background: var(--accent); color:#fff; box-shadow: var(--shadow); }
-.faq-answer{flex:1;padding:16px}
+.faq-answer{flex:1;padding:16px; height: fit-content}
 .hidden { display: none; }
 
 /* Slideshow */

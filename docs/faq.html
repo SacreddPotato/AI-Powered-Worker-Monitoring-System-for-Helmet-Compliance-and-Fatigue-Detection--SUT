@@ -10,44 +10,91 @@
 <body>
     <div id="sidebarOverlay"></div>
 
-<div class="page-simple">
-<header class="mini-header">
-<a href="index.html" class="back">← Back</a>
-<h1>Frequently Asked Questions</h1>
-</header>
+    <div class="site">
+        <aside id="sidebar" class="sidebar">
+            <div class="brand">
+                <img src="assets/sut.logo.png" class="logo" alt="Project Logo">
+                <div class="brand-text">
+                    <div class="univ">Safety Monitoring AI</div>
+                    <div class="proj">Graduation Project Team</div>
+                </div>
+            </div>
+            <nav class="side-nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="about.html" class="nav-link">About the Project</a>
+                <a href="helmet.html" class="nav-link">AI Helmet Detection</a>
+                <a href="fatigue.html" class="nav-link">Fatigue Detection</a>
+                <a href="faq.html" class="nav-link active">FAQ</a>
+            </nav>
+            <div class="side-footer">Capstone Project • 2024-2025</div>
+        </aside>
 
-<main class="faq-area">
-<aside class="faq-questions">
-<ul>
-<li class="question" data-answer="ans1">What dataset did you use?</li>
-<li class="question" data-answer="ans2">What models are running?</li>
-<li class="question" data-answer="ans3">Can I test it with my own video?</li>
-</ul>
-</aside>
+        <div class="main">
+            <header class="topbar">
+                <div class="top-left">
+                    <button id="menuToggle" class="hamburger">☰</button>
+                    <div class="title">Frequently Asked Questions</div>
+                </div>
+                <div class="top-right">
+                    <a href="about.html" class="link primary">Back to Team</a>
+                </div>
+            </header>
 
-<section class="faq-answer card" id="faqAnswer">
-<p>Select a question to see the technical details.</p>
+            <main class="content">
+                <div class="faq-area">
+                    <aside class="faq-questions">
+                        <ul>
+                            <li class="question active" data-answer="ans1">What dataset did you use?</li>
+                            <li class="question" data-answer="ans2">How does the fatigue logic work?</li>
+                            <li class="question" data-answer="ans3">Is video data saved?</li>
+                            <li class="question" data-answer="ans4">Does it work with glasses?</li>
+                            <li class="question" data-answer="ans5">Hardware Requirements?</li>
+                        </ul>
+                    </aside>
 
-<div id="ans1" class="hidden">
-<h4>What dataset did you use?</h4>
-<p>We used the <a href="https://www.kaggle.com/datasets/rishab260/uta-reallife-drowsiness-dataset"><strong>University of Texas' Fatigue Dataset</strong></a> specifically for this project. As the team thought this had the perfect balance of real-world conditions and comprehensive annotations.</p>
-<p>We also used readily available helmet datasets from public sources to train our helmet detection models.</p>
-</div>
+                    <section class="faq-answer card" id="faqAnswer">
+                        <div id="ans1">
+                            <h4>What dataset did you use?</h4>
+                            <p>We used the <a style="text-decoration: underline;" href="https://www.kaggle.com/datasets/rishab260/uta-reallife-drowsiness-dataset"><strong>University of Texas' Fatigue Dataset</strong></a> specifically for this project. As the team thought this had the perfect balance of real-world conditions and comprehensive annotations.</p>
+                            <p>We also used readily available helmet datasets from public sources to train our helmet detection models.</p>
+                        </div>
 
-<div id="ans2" class="hidden">
-<h4>What models are running?</h4>
-<p>For Helmet Detection, we use a fine-tuned <strong>YOLOv8</strong> model. For Fatigue Detection, we implemented a hybrid system using <strong>Dlib</strong> for geometric landmarks (EAR/MAR) and a <strong>Swin Transformer</strong> for visual feature extraction.</p>
-</div>
+                        <div id="ans2" class="hidden">
+                            <h4>How does the fatigue logic work?</h4>
+                            <p>We use a <strong>Hybrid Approach</strong> to ensure accuracy:</p>
+                            <ul>
+                                <li><strong>Geometric Analysis:</strong> We use Dlib to track 68 facial landmarks, calculating the Eye Aspect Ratio (EAR) and Mouth Aspect Ratio (MAR) to detect physical signs like blinking and yawning.</li>
+                                <li><strong>Deep Learning:</strong> Simultaneously, a Swin Transformer model analyzes the visual features of the face to classify the overall state (Alert vs. Fatigued).</li>
+                            </ul>
+                            <p>The final decision is a weighted average of these two systems.</p>
+                        </div>
 
-<div id="ans3" class="hidden">
-<h4>Can I test it with my own video?</h4>
-<p>Yes! On the specific demo pages (Helmet or Fatigue), you can upload a local video file to run the inference pipeline on your own footage.</p>
-</div>
+                        <div id="ans3" class="hidden">
+                            <h4>Is video data saved?</h4>
+                            <p><strong>No.</strong> The system processes video feeds in real-time Random Access Memory (RAM). No video footage is written to the disk or database to ensure worker privacy.</p>
+                            <p><em>Note: If you use the "Upload Video" feature for testing, the file is temporarily stored for processing and then deleted.</em></p>
+                        </div>
 
-</section>
-</main>
-</div>
+                        <div id="ans4" class="hidden">
+                            <h4>Does it work with glasses?</h4>
+                            <p>Yes, but with limitations. The Dlib landmark detector generally works well with transparent glasses. However, dark sunglasses or heavy reflections may block the eye tracking (EAR). In these cases, our Swin Transformer model acts as a backup since it analyzes the entire face context rather than just the eyes.</p>
+                        </div>
 
-<script src="app.js"></script>
+                        <div id="ans5" class="hidden">
+                            <h4>Hardware Requirements?</h4>
+                            <p>The system is designed to be lightweight, but performance varies by hardware:</p>
+                            <ul>
+                                <li><strong>CPU Only:</strong> Works for the Helmet Detection (YOLOv8n) but may run at lower FPS (5-10 FPS).</li>
+                                <li><strong>GPU (Recommended):</strong> For the Fatigue Detection module (Swin Transformer), a CUDA-enabled GPU is recommended to achieve real-time performance (25+ FPS) due to the complexity of the transformer model. However, a CPU will do the job for testing purposes.</li>
+                            </ul>
+                        </div>
+
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
