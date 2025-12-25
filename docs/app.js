@@ -1,10 +1,9 @@
-/* app.js — Updated for Flask Integration */
+/* app.js — Updated */
 
 const $ = (sel) => document.querySelector(sel);
-
 function safeGet(id){ return document.getElementById(id); }
 
-// Sidebar Logic (Unchanged)
+// Sidebar Logic
 function initSidebar(){
   const menuToggle = document.getElementById('menuToggle');
   const sidebar = document.getElementById('sidebar');
@@ -27,19 +26,46 @@ function initSidebar(){
 }
 
 // =========================
-// Fatigue Page Integration (THE FIX)
+// FAQ Logic (NEW)
+// =========================
+function initFaqPage(){
+  const questions = document.querySelectorAll('.question');
+  // Just return if we aren't on the FAQ page
+  if(questions.length === 0) return;
+
+  questions.forEach(q => {
+    q.addEventListener('click', () => {
+      // 1. Remove active styling from all list items
+      questions.forEach(item => item.style.backgroundColor = 'transparent');
+      questions.forEach(item => item.style.color = 'inherit');
+      
+      // 2. Add active styling to clicked
+      // (Using inline style or class, let's use the styles.css hover variables mostly)
+      q.classList.add('active'); // You can style this class in CSS if you want specific active state
+      
+      // 3. Hide all answer divs
+      document.querySelectorAll('.faq-answer > div').forEach(div => div.classList.add('hidden'));
+
+      // 4. Show the target answer
+      const ansId = q.getAttribute('data-answer');
+      const target = document.getElementById(ansId);
+      if(target) target.classList.remove('hidden');
+    });
+  });
+}
+
+// =========================
+// Fatigue Page
 // =========================
 function initFatiguePage(){
   const camBtn = safeGet('camFat');
   const clearBtn = safeGet('clearFat');
-  const preview = safeGet('previewFat');    // The default placeholder image
-  const container = safeGet('viewerWrapFat'); // The container div
+  const preview = safeGet('previewFat');
+  const container = safeGet('viewerWrapFat');
   
-  // Check if we are viewing an uploaded video (from the URL query param)
   const urlParams = new URLSearchParams(window.location.search);
   const source = urlParams.get('source');
 
-  // Create or Find the Stream Image Element
   let streamImg = document.getElementById('serverStreamFat');
   if(!streamImg && container){
       streamImg = document.createElement('img');
@@ -50,60 +76,48 @@ function initFatiguePage(){
       container.appendChild(streamImg);
   }
 
-  // If a source exists in URL (e.g. after upload), start playing it immediately
   if(source && streamImg) {
       if(preview) preview.style.display = 'none';
       streamImg.src = "/video_feed?source=" + encodeURIComponent(source);
       streamImg.style.display = 'block';
   }
 
-  // "Use Camera" Button Logic
   if(camBtn){
     camBtn.addEventListener('click', () => {
-       // 1. Hide the placeholder
        if(preview) preview.style.display = 'none';
-       
-       // 2. Point the image to the Python webcam feed
        if(streamImg) {
-           // Add timestamp to prevent browser caching
            streamImg.src = "/video_feed?source=0&t=" + new Date().getTime();
            streamImg.style.display = 'block';
        }
-       
        const logArea = safeGet('logAreaFat');
        if(logArea) logArea.innerHTML = `<div>${new Date().toLocaleTimeString()} - Webcam Started</div>` + logArea.innerHTML;
     });
   }
 
-  // "Stop / Clear" Button Logic
   if(clearBtn){
       clearBtn.addEventListener('click', () => {
           if(streamImg) {
-              streamImg.src = ""; // Cut the connection
+              streamImg.src = "";
               streamImg.style.display = 'none';
           }
-          if(preview) preview.style.display = 'block'; // Show placeholder
-          
-          // Clear URL params so refresh doesn't reload the video
+          if(preview) preview.style.display = 'block';
           window.history.pushState({}, document.title, window.location.pathname);
       });
   }
 }
 
 // =========================
-// Helmet Page Integration
+// Helmet Page
 // =========================
 function initHelmetPage(){
   const camBtn = safeGet('camHelmet');
   const clearBtn = safeGet('clearHelmet');
-  const preview = safeGet('previewHelmet');    // The default placeholder image
-  const container = safeGet('viewerWrapHelmet'); // The container div
+  const preview = safeGet('previewHelmet');
+  const container = safeGet('viewerWrapHelmet');
   
-  // Check if we are viewing an uploaded video (from the URL query param)
   const urlParams = new URLSearchParams(window.location.search);
   const source = urlParams.get('source');
 
-  // Create or Find the Stream Image Element
   let streamImg = document.getElementById('serverStreamHelmet');
   if(!streamImg && container){
       streamImg = document.createElement('img');
@@ -114,43 +128,32 @@ function initHelmetPage(){
       container.appendChild(streamImg);
   }
 
-  // If a source exists in URL (e.g. after upload), start playing it immediately
   if(source && streamImg) {
       if(preview) preview.style.display = 'none';
       streamImg.src = "/helmet_video_feed?source=" + encodeURIComponent(source);
       streamImg.style.display = 'block';
   }
 
-  // "Use Camera" Button Logic
   if(camBtn){
     camBtn.addEventListener('click', () => {
-       // 1. Hide the placeholder
        if(preview) preview.style.display = 'none';
-       
-       // 2. Point the image to the Python helmet detection webcam feed
        if(streamImg) {
-           // Add timestamp to prevent browser caching
            streamImg.src = "/helmet_video_feed?source=0&t=" + new Date().getTime();
            streamImg.style.display = 'block';
        }
-       
        const logArea = safeGet('logAreaHelmet');
        if(logArea) logArea.innerHTML = `<div>${new Date().toLocaleTimeString()} - Helmet Detection Started</div>` + logArea.innerHTML;
     });
   }
 
-  // "Stop / Clear" Button Logic
   if(clearBtn){
       clearBtn.addEventListener('click', () => {
           if(streamImg) {
-              streamImg.src = ""; // Cut the connection
+              streamImg.src = "";
               streamImg.style.display = 'none';
           }
-          if(preview) preview.style.display = 'block'; // Show placeholder
-          
-          // Clear URL params so refresh doesn't reload the video
+          if(preview) preview.style.display = 'block';
           window.history.pushState({}, document.title, window.location.pathname);
-          
           const logArea = safeGet('logAreaHelmet');
           if(logArea) logArea.innerHTML = `<div>${new Date().toLocaleTimeString()} - Detection Stopped</div>` + logArea.innerHTML;
       });
@@ -158,7 +161,7 @@ function initHelmetPage(){
 }
 
 // =========================
-// Features Slideshow
+// Slideshow
 // =========================
 function initFeaturesSlideshow(){
   const slideshow = document.querySelector('.features-slideshow');
@@ -172,23 +175,14 @@ function initFeaturesSlideshow(){
   
   if(!track || slides.length === 0) return;
   
-  let currentSlide = 1; // Start with middle slide (index 1)
+  let currentSlide = 1;
   let autoPlayInterval = null;
-  const autoPlayDelay = 5000; // 5 seconds
+  const autoPlayDelay = 5000;
   
   function updateSlideshow() {
-    // Update track position
     track.style.transform = `translateX(-${currentSlide * 100}%)`;
-    
-    // Update active states
-    slides.forEach((slide, index) => {
-      slide.classList.toggle('active', index === currentSlide);
-    });
-    
-    // Update dots
-    dots.forEach((dot, index) => {
-      dot.classList.toggle('active', index === currentSlide);
-    });
+    slides.forEach((slide, index) => slide.classList.toggle('active', index === currentSlide));
+    dots.forEach((dot, index) => dot.classList.toggle('active', index === currentSlide));
   }
   
   function goToSlide(index) {
@@ -199,82 +193,41 @@ function initFeaturesSlideshow(){
     resetAutoPlay();
   }
   
-  function nextSlide() {
-    goToSlide(currentSlide + 1);
-  }
+  function nextSlide() { goToSlide(currentSlide + 1); }
+  function prevSlide() { goToSlide(currentSlide - 1); }
   
-  function prevSlide() {
-    goToSlide(currentSlide - 1);
-  }
+  function startAutoPlay() { autoPlayInterval = setInterval(nextSlide, autoPlayDelay); }
+  function stopAutoPlay() { if(autoPlayInterval) { clearInterval(autoPlayInterval); autoPlayInterval = null; } }
+  function resetAutoPlay() { stopAutoPlay(); startAutoPlay(); }
   
-  function startAutoPlay() {
-    autoPlayInterval = setInterval(nextSlide, autoPlayDelay);
-  }
-  
-  function stopAutoPlay() {
-    if(autoPlayInterval) {
-      clearInterval(autoPlayInterval);
-      autoPlayInterval = null;
-    }
-  }
-  
-  function resetAutoPlay() {
-    stopAutoPlay();
-    startAutoPlay();
-  }
-  
-  // Navigation buttons
   if(nextBtn) nextBtn.addEventListener('click', nextSlide);
   if(prevBtn) prevBtn.addEventListener('click', prevSlide);
+  dots.forEach((dot, index) => dot.addEventListener('click', () => goToSlide(index)));
   
-  // Dot navigation
-  dots.forEach((dot, index) => {
-    dot.addEventListener('click', () => goToSlide(index));
-  });
-  
-  // Pause on hover
   slideshow.addEventListener('mouseenter', stopAutoPlay);
   slideshow.addEventListener('mouseleave', startAutoPlay);
   
-  // Touch/swipe support
   let touchStartX = 0;
   let touchEndX = 0;
-  
-  track.addEventListener('touchstart', (e) => {
-    touchStartX = e.changedTouches[0].screenX;
-    stopAutoPlay();
-  });
-  
-  track.addEventListener('touchend', (e) => {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipe();
-    startAutoPlay();
-  });
+  track.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; stopAutoPlay(); });
+  track.addEventListener('touchend', (e) => { touchEndX = e.changedTouches[0].screenX; handleSwipe(); startAutoPlay(); });
   
   function handleSwipe() {
-    const swipeThreshold = 50;
-    const diff = touchStartX - touchEndX;
-    
-    if(Math.abs(diff) > swipeThreshold) {
-      if(diff > 0) {
-        nextSlide(); // Swipe left - next
-      } else {
-        prevSlide(); // Swipe right - previous
-      }
+    if(Math.abs(touchStartX - touchEndX) > 50) {
+      if(touchStartX - touchEndX > 0) nextSlide(); else prevSlide();
     }
   }
   
-  // Initialize
   updateSlideshow();
   startAutoPlay();
 }
 
-// Init
 function init(){
   try{ initSidebar(); }catch(e){}
   try{ initFatiguePage(); }catch(e){}
   try{ initHelmetPage(); }catch(e){}
   try{ initFeaturesSlideshow(); }catch(e){}
+  try{ initFaqPage(); }catch(e){} // Added this
 }
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
