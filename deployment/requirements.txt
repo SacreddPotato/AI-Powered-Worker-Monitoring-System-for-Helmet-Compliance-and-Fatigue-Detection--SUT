@@ -1,0 +1,10 @@
+flask
+opencv-python-headless
+ultralytics
+dlib
+torch
+torchvision
+numpy
+scipy
+imutils
+Pillow

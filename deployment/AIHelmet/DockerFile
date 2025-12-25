@@ -1,0 +1,32 @@
+# Use Python 3.9
+FROM python:3.9-slim
+
+# 1. Install system dependencies required for Dlib and OpenCV
+RUN apt-get update && apt-get install -y \
+    cmake \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Set working directory
+WORKDIR /app
+
+# 3. Copy dependencies and install
+# We install dlib separately first to ensure cmake is found
+COPY requirements.txt .
+RUN pip install --no-cache-dir dlib && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 4. Copy the rest of the application code
+COPY . .
+
+# 5. Create the uploads directory to avoid permission errors
+RUN mkdir -p uploads && chmod 777 uploads
+
+# 6. Expose the port (Hugging Face uses 7860)
+EXPOSE 7860
+
+# 7. Run the application
+# We use host 0.0.0.0 and port 7860
+CMD ["python", "app.py"]
