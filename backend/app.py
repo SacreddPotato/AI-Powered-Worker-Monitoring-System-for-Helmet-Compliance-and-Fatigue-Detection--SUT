@@ -5,9 +5,14 @@ from werkzeug.utils import secure_filename
 from camera import VideoCamera
 from ultralytics import YOLO
 
-# Point Flask to the templates folder for backend templates
-# For the static website, use the docs/ folder served by GitHub Pages
-app = Flask(__name__, template_folder='templates', static_folder='templates', static_url_path='')
+base_dir = os.path.dirname(os.path.abspath(__file__))
+docs_folder = os.path.join(base_dir, '..', 'docs')
+
+# Point Flask to use 'docs' for both templates and static files
+app = Flask(__name__, 
+            template_folder=docs_folder, 
+            static_folder=docs_folder, 
+            static_url_path='')
 
 UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
