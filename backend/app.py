@@ -161,7 +161,8 @@ def check_and_download_models():
         "backend/best.pt": project_root / "backend" / "best.pt",
         "backend/swin_best.pth": project_root / "backend" / "swin_best.pth",
         "backend/shape_predictor_68_face_landmarks.dat": project_root / "backend" / "shape_predictor_68_face_landmarks.dat",
-        "backend/yolov8n.pt": project_root / "backend" / "yolov8n.pt"
+        "backend/yolov8n.pt": project_root / "backend" / "yolov8n.pt",
+        "backend/fatigue_v2_model.pth": project_root / "backend" / "fatigue_v2_model.pth",
     }
 
     print(f"[INFO] Initializing model verification for: {repo_id}")
