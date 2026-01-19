@@ -1,13 +1,15 @@
-# Use Python 3.9 as the base image
-FROM python:3.9
+# Use a specific, stable version of Python (Bookworm) to prevent future breakage
+FROM python:3.9-bookworm
 
 # Set the working directory to /code
 WORKDIR /code
 
-# Install system dependencies required for OpenCV and Dlib
+# Install system dependencies
+# FIX: Replaced 'libgl1-mesa-glx' with 'libgl1' and 'libglx-mesa0'
 RUN apt-get update && apt-get install -y \
     cmake \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libglib2.0-0 \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -28,5 +30,4 @@ RUN mkdir -p backend/uploads && chmod 777 backend/uploads
 EXPOSE 7860
 
 # Command to run the application
-# We use 'python' to run the app directly, ensuring __file__ paths work correctly
 CMD ["python", "backend/app.py"]
