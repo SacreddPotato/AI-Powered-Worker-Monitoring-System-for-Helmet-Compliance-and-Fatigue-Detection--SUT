@@ -1,3 +1,14 @@
+---
+title: AI Worker Safety Monitor
+emoji: 👷
+colorFrom: yellow
+colorTo: orange
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # AI-Powered Worker Monitoring System
 
 A computer vision system for **Helmet Compliance** and **Fatigue Detection** designed to enhance workplace safety.
@@ -35,21 +46,10 @@ The Functional dashboard is hosted via huggingfaces.
 
 ---
 
-## 📁 Project Structure
+## 📂 Project Structure
 
-```text
-/
-├── docs/                    # Static Frontend (HTML/JS/CSS)
-│   ├── index.html          # Dashboard Home
-│   ├── helmet.html         # Helmet Demo Interface
-│   ├── fatigue.html        # Fatigue Demo Interface
-│   └── assets/             # Project Assets
-│
-├── backend/                 # Flask API & Inference Engine
-│   ├── app.py              # Main Application Server
-│   ├── camera.py           # Video Stream Processing
-│   ├── AIHelmet/           # YOLOv8 Model Weights
-│   ├── swin_best.pth       # Swin Transformer Weights
-│   └── shape_predictor...  # Dlib Landmark Predictor
-│
-└── README.md               # Documentation
+This project is structured to run as a Docker container:
+* `Dockerfile`: Defines the environment and installation steps.
+* `backend/`: Contains the Flask application (`app.py`) and AI inference logic.
+* `docs/`: Static assets and frontend templates.
+* `requirements.txt`: Python dependencies.
