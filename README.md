@@ -10,7 +10,7 @@ A computer vision system for **Helmet Compliance** and **Fatigue Detection** des
 
 **[View Project Dashboard (Frontend only)](https://sacreddpotato.github.io/AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT/)**
 
-**[View Project Dashboard (Model Functionality included - Might be slightly altered or behind in some changes)](https://sacreddpotato.github.io/AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT/)**
+**[View Project Dashboard (Model Functionality included - Might be slightly altered or behind in some changes)](https://huggingface.co/spaces/SacreddPotato/worker-monitoring-system)**
 
 The frontend interface is hosted via GitHub Pages in the `docs/` folder.
 
