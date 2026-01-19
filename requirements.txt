@@ -1,7 +1,6 @@
 flask
 opencv-python-headless
 ultralytics
-dlib
 torch
 torchvision
 numpy
