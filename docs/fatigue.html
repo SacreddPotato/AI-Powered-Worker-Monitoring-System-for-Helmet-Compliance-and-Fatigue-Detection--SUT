@@ -107,7 +107,7 @@
           <div class="example-card">
             <div class="example-image-wrapper">
               <img
-                src="assets/fatigue photos/fatigue-active.jpeg"
+                src="assets/fatigue photos/fatigue-active.jpg"
                 alt="Active state - Normal detection"
                 class="example-img"
               />
@@ -130,7 +130,7 @@
           <div class="example-card">
             <div class="example-image-wrapper">
               <img
-                src="assets/fatigue photos/fatigue-inactive.jpeg"
+                src="assets/fatigue photos/fatigue-inactive.jpg"
                 alt="Warning state - Fatigue detected"
                 class="example-img"
               />
@@ -153,7 +153,7 @@
           <div class="example-card">
             <div class="example-image-wrapper">
               <img
-                src="assets/fatigue photos/fatigue-cali.jpeg"
+                src="assets/fatigue photos/fatigue-cali.jpg"
                 alt="Calibrating state - System initialization"
                 class="example-img"
               />
@@ -204,7 +204,7 @@
             .then((data) => {
               console.log("Upload successful:", data);
               if (logArea) {
-                logArea.innerHTML += `<div style="color: #10b981">✅ Upload complete</div>`;
+                logArea.innerHTML += `<div style="color: #10b981">Upload complete</div>`;
                 logArea.scrollTop = logArea.scrollHeight;
               }
               // Start video stream with uploaded file
@@ -232,7 +232,7 @@
             .catch((error) => {
               console.error("Upload failed:", error);
               if (logArea) {
-                logArea.innerHTML += `<div style="color: #ef4444">❌ Upload failed: ${error.message}</div>`;
+                logArea.innerHTML += `<div style="color: #ef4444">Upload failed: ${error.message}</div>`;
                 logArea.scrollTop = logArea.scrollHeight;
               }
             });
