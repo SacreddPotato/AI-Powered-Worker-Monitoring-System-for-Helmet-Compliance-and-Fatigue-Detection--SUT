@@ -1,9 +1,10 @@
 import os
 import cv2
-from flask import Flask, render_template, Response, request, redirect, url_for
+from flask import Flask, render_template, Response, request, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
 from camera import VideoCamera
 from helmet_camera import HelmetCamera
+from fatigue_v2_api import load_fatigue_v2_model, predict_fatigue, get_health_status
 from huggingface_hub import hf_hub_download
 from pathlib import Path
 
@@ -49,6 +50,10 @@ def demo():
 @app.route('/faq.html')
 def faq():
     return render_template('faq.html')
+
+@app.route('/fatigue-v2.html')
+def fatigue_v2():
+    return render_template('fatigue-v2.html')
 
 # --- VIDEO STREAM LOGIC ---
 def gen(camera):
@@ -112,6 +117,29 @@ def upload_helmet_video():
     return {'success': False, 'error': 'No file provided'}, 400
 
 
+# --- FATIGUE V2 API ENDPOINTS ---
+@app.route('/health', methods=['GET'])
+def fatigue_v2_health():
+    """Health check endpoint for Fatigue V2 model"""
+    return jsonify(get_health_status())
+
+
+@app.route('/predict', methods=['POST'])
+def fatigue_v2_predict():
+    """Prediction endpoint for Fatigue V2 model"""
+    data = request.get_json()
+    
+    if not data or 'image_base64' not in data:
+        return jsonify({'error': 'No image provided'}), 400
+    
+    result = predict_fatigue(data['image_base64'])
+    
+    if 'error' in result:
+        return jsonify(result), 500
+    
+    return jsonify(result)
+
+
 def check_and_download_models():
     """
     Robust version: Uses absolute paths to check for models, ignoring 
@@ -169,6 +197,9 @@ def check_and_download_models():
 
 if __name__ == '__main__':
     check_and_download_models()
+    
+    # Load Fatigue V2 model
+    load_fatigue_v2_model()
     
     import os
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'

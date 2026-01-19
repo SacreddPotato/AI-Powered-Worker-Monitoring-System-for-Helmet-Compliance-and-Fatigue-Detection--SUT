@@ -8,3 +8,4 @@ scipy
 werkzeug
 huggingface-hub
 imutils
+pillow

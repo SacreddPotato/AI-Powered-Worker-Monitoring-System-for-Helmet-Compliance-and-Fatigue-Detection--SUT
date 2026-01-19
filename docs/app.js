@@ -230,7 +230,8 @@ function initFatigueV2Page(){
   const webcamVideo = document.getElementById("webcamVideo");
   if(!webcamVideo) return;
 
-  const API_URL = "http://localhost:5000";
+  // Use relative URL (same server)
+  const API_URL = "";
   let stream = null;
   let autoDetectInterval = null;
 
