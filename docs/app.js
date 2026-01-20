@@ -494,6 +494,124 @@ function initFatigueV2Page(){
   addLog("🚀 System ready", "#10b981");
 }
 
+// =========================
+// Handle Video Upload - Fatigue Page
+// =========================
+function handleVideoUploadFatigue(input) {
+  if (input.files && input.files[0]) {
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+
+    // Add to logs
+    const logArea = document.getElementById("logAreaFat");
+    if (logArea) {
+      logArea.innerHTML += `<div>📤 Uploading: ${input.files[0].name}</div>`;
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // Submit to your backend
+    fetch("/upload_video", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Upload successful:", data);
+        if (logArea) {
+          logArea.innerHTML += `<div style="color: #10b981">Upload complete</div>`;
+          logArea.scrollTop = logArea.scrollHeight;
+        }
+        // Start video stream with uploaded file
+        if (data.success && data.path) {
+          const preview = document.getElementById('previewFat');
+          const container = document.getElementById('viewerWrapFat');
+          let streamImg = document.getElementById('serverStreamFat');
+          
+          if (!streamImg && container) {
+            streamImg = document.createElement('img');
+            streamImg.id = 'serverStreamFat';
+            streamImg.style.width = '100%';
+            streamImg.style.display = 'none';
+            streamImg.style.borderRadius = '8px';
+            container.appendChild(streamImg);
+          }
+          
+          if (preview) preview.style.display = 'none';
+          if (streamImg) {
+            streamImg.src = "/video_feed?source=" + encodeURIComponent(data.path);
+            streamImg.style.display = 'block';
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Upload failed:", error);
+        if (logArea) {
+          logArea.innerHTML += `<div style="color: #ef4444">Upload failed: ${error.message}</div>`;
+          logArea.scrollTop = logArea.scrollHeight;
+        }
+      });
+  }
+}
+
+// =========================
+// Handle Video Upload - Helmet Page
+// =========================
+function handleVideoUploadHelmet(input) {
+  if (input.files && input.files[0]) {
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+
+    // Add to logs
+    const logArea = document.getElementById("logAreaHelmet");
+    if (logArea) {
+      logArea.innerHTML += `<div>📤 Uploading: ${input.files[0].name}</div>`;
+      logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    // Submit to your backend
+    fetch("/upload_helmet_video", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Upload successful:", data);
+        if (logArea) {
+          logArea.innerHTML += `<div style="color: #10b981">✅ Upload complete</div>`;
+          logArea.scrollTop = logArea.scrollHeight;
+        }
+        // Start video stream with uploaded file
+        if (data.success && data.path) {
+          const preview = document.getElementById('previewHelmet');
+          const container = document.getElementById('viewerWrapHelmet');
+          let streamImg = document.getElementById('serverStreamHelmet');
+          
+          if (!streamImg && container) {
+            streamImg = document.createElement('img');
+            streamImg.id = 'serverStreamHelmet';
+            streamImg.style.width = '100%';
+            streamImg.style.display = 'none';
+            streamImg.style.borderRadius = '8px';
+            container.appendChild(streamImg);
+          }
+          
+          if (preview) preview.style.display = 'none';
+          if (streamImg) {
+            streamImg.src = "/helmet_video_feed?source=" + encodeURIComponent(data.path);
+            streamImg.style.display = 'block';
+          }
+        }
+      })
+      .catch((error) => {
+        console.error("Upload failed:", error);
+        if (logArea) {
+          logArea.innerHTML += `<div style="color: #ef4444">❌ Upload failed: ${error.message}</div>`;
+          logArea.scrollTop = logArea.scrollHeight;
+        }
+      });
+  }
+}
+
 function init(){
   try{ initSidebar(); }catch(e){}
   try{ initFatiguePage(); }catch(e){}

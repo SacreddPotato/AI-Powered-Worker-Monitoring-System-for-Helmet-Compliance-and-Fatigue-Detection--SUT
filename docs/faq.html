@@ -204,29 +204,5 @@
     </div>
 
     <script src="app.js"></script>
-
-    <!-- ✅ ADD THIS SCRIPT TO HANDLE CLICKING -->
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const questions = document.querySelectorAll(".faq-questions .question");
-
-        questions.forEach((question) => {
-          question.addEventListener("click", function () {
-            // Remove active from all questions
-            questions.forEach((q) => q.classList.remove("active"));
-
-            // Add active to clicked question
-            this.classList.add("active");
-
-            // Show the corresponding answer (keep existing FAQ logic)
-            const answerId = this.getAttribute("data-answer");
-            document.querySelectorAll(".faq-answer > div").forEach((div) => {
-              div.classList.add("hidden");
-            });
-            document.getElementById(answerId).classList.remove("hidden");
-          });
-        });
-      });
-    </script>
   </body>
 </html>
