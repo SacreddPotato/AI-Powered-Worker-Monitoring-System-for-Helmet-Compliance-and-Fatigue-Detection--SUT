@@ -16,7 +16,7 @@ license: mit
 ![Flask](https://img.shields.io/badge/Flask-Backend-lightgrey?style=for-the-badge&logo=flask)
 ![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-orange?style=for-the-badge&logo=pytorch)
 ![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-green?style=for-the-badge&logo=opencv)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+![License](https://img.shields.io/badge/License-Unlicense-yellow.svg?style=for-the-badge)
 
 ## 🎓 Project Abstract
 
