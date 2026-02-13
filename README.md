@@ -170,4 +170,4 @@ The models utilized in this study were trained and validated using the following
 ---
 
 ## 📄 License
-This project is released under the **MIT License**.
+This project is released under the **Unlicense License**.
