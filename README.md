@@ -122,21 +122,30 @@ Open **http://localhost:7860** in your browser.
 
 ### Development Mode (hot reload)
 
-For frontend development with hot reload, run the backend and frontend dev server separately:
+The easiest way to develop is with the included run script, which launches both servers in one terminal:
 
-**Terminal 1 — Backend:**
 ```bash
-cd backend
-daphne -b 0.0.0.0 -p 7860 sentinel.asgi:application
+python run.py
 ```
 
-**Terminal 2 — Frontend:**
+This starts Daphne (backend, port 7860) and Vite (frontend, port 5173) together. Open **http://localhost:5173** for hot-reload development. Press Ctrl+C to stop both.
+
+You can also run them individually:
+
 ```bash
-cd frontend
-npm run dev
+python run.py --backend   # backend only
+python run.py --frontend  # frontend only
 ```
 
-The Vite dev server (port 5173) proxies API and WebSocket requests to the backend on port 7860.
+Or manually in separate terminals:
+
+```bash
+# Terminal 1
+cd backend && daphne -b 0.0.0.0 -p 7860 sentinel.asgi:application
+
+# Terminal 2
+cd frontend && npm run dev
+```
 
 ## Docker
 
