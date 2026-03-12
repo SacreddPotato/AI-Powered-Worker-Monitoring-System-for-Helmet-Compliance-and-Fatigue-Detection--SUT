@@ -5,11 +5,9 @@ import Toast from "./components/Toast";
 import { createAlertSocket } from "./ws";
 import { api } from "./api";
 import FeedsPage from "./pages/FeedsPage";
+import AlertsPage from "./pages/AlertsPage";
 
-// Lazy page placeholders (will be built in Tasks 11-13)
-function AlertsPage() {
-  return <div className="flex-1 flex items-center justify-center text-zinc-600">Alerts — coming next</div>;
-}
+// Lazy page placeholders (will be built in Tasks 12-13)
 function ModelsPage() {
   return <div className="flex-1 flex items-center justify-center text-zinc-600">Models — coming next</div>;
 }
