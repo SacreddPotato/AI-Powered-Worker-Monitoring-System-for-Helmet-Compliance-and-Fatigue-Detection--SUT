@@ -6,11 +6,9 @@ import { createAlertSocket } from "./ws";
 import { api } from "./api";
 import FeedsPage from "./pages/FeedsPage";
 import AlertsPage from "./pages/AlertsPage";
+import ModelsPage from "./pages/ModelsPage";
 
-// Lazy page placeholders (will be built in Tasks 12-13)
-function ModelsPage() {
-  return <div className="flex-1 flex items-center justify-center text-zinc-600">Models — coming next</div>;
-}
+// Lazy page placeholder (will be built in Task 13)
 function DevLabPage() {
   return <div className="flex-1 flex items-center justify-center text-zinc-600">Dev Lab — coming next</div>;
 }
