@@ -14,3 +14,4 @@ imutils
 werkzeug
 pillow
 huggingface-hub
+psutil
