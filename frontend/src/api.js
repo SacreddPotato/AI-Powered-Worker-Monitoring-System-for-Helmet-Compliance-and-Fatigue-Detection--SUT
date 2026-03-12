@@ -41,7 +41,7 @@ export const api = {
     return fetch(`${BASE}/dev/videos/`, { method: "POST", body: form }).then((r) => r.json());
   },
   listVideos: () => request("/dev/videos/"),
-  videoStreamUrl: (id, annotated = false) => `${BASE}/dev/videos/${id}/stream/${annotated ? "?annotated=1" : ""}`,
+  videoFileUrl: (id) => `${BASE}/dev/videos/${id}/file/`,
   analyzeVideo: (id, opts) => request(`/dev/videos/${id}/analyze/`, { method: "POST", body: JSON.stringify(opts) }),
   getThresholds: () => request("/dev/thresholds/"),
   updateThresholds: (data) => request("/dev/thresholds/", { method: "PUT", body: JSON.stringify(data) }),

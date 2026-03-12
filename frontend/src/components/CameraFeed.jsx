@@ -1,7 +1,7 @@
 import Badge from "./Badge";
 import { api } from "../api";
 
-export default function CameraFeed({ camera, isHero = false, onClick, badges = [] }) {
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [] }) {
   return (
     <div
       onClick={onClick}
@@ -28,9 +28,20 @@ export default function CameraFeed({ camera, isHero = false, onClick, badges = [
       {/* Top bar */}
       <div className="absolute top-2.5 left-3 right-3 flex justify-between items-center z-10">
         <span className="text-[10px] font-semibold text-zinc-400">{camera.name}{camera.location ? ` — ${camera.location}` : ""}</span>
-        <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse-dot" />
-          <span className="text-[8px] text-red-500 font-semibold">LIVE</span>
+        <div className="flex items-center gap-2">
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="text-zinc-600 hover:text-red-400 transition-colors"
+              title="Remove camera"
+            >
+              <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
+            </button>
+          )}
+          <div className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse-dot" />
+            <span className="text-[8px] text-red-500 font-semibold">LIVE</span>
+          </div>
         </div>
       </div>
 

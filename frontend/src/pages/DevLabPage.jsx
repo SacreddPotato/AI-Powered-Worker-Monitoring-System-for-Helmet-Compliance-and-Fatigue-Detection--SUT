@@ -43,12 +43,12 @@ export default function DevLabPage() {
 
 function VideoAnalysis() {
   const [file, setFile] = useState(null);
+  const [localUrl, setLocalUrl] = useState(null);
   const [video, setVideo] = useState(null);
   const [results, setResults] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [logs, setLogs] = useState([]);
   const [config, setConfig] = useState({ sample_every_n_frames: 10, max_samples: 50 });
-  const [previewMode, setPreviewMode] = useState("raw");
   const fileRef = useRef();
 
   function addLog(level, msg) {
@@ -56,22 +56,36 @@ function VideoAnalysis() {
     setLogs((prev) => [...prev, { ts, level, msg }]);
   }
 
+  function handleFileSelect(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    // Create local blob URL for instant preview
+    if (localUrl) URL.revokeObjectURL(localUrl);
+    setLocalUrl(URL.createObjectURL(f));
+  }
+
   async function handleUpload() {
     if (!file) return;
     addLog("info", `Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-    const v = await api.uploadVideo(file);
-    setVideo(v);
-    addLog("ok", `Upload complete — ID: ${v.id}`);
+    try {
+      const v = await api.uploadVideo(file);
+      setVideo(v);
+      addLog("ok", `Upload complete — ID: ${v.id}, ${v.duration ? v.duration.toFixed(1) + "s" : "unknown duration"}`);
+    } catch (err) {
+      addLog("err", `Upload failed: ${err.message}`);
+    }
   }
 
   async function handleAnalyze() {
     if (!video) return;
     setAnalyzing(true);
+    setResults(null);
     addLog("info", `Analysis started — ${config.max_samples} samples @ every ${config.sample_every_n_frames} frames`);
     try {
       const r = await api.analyzeVideo(video.id, config);
       setResults(r);
-      addLog("ok", `Analysis complete — ${r.frames_analyzed}/${r.frames_total} frames`);
+      addLog("ok", `Analysis complete — ${r.frames_analyzed}/${r.frames_total} frames analyzed`);
     } catch (err) {
       addLog("err", `Analysis failed: ${err.message}`);
     }
@@ -90,19 +104,19 @@ function VideoAnalysis() {
             <div className="text-2xl text-zinc-600 mb-2">&#128206;</div>
             <div className="text-[11px] text-zinc-500">{file ? file.name : "Drop video or click to browse"}</div>
             <div className="text-[9px] text-zinc-700 mt-1">MP4, AVI, MOV</div>
-            <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
           </div>
           {file && !video && (
             <button onClick={handleUpload} className="mt-2 w-full py-2 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25">
-              Upload
+              Upload & Prepare for Analysis
             </button>
           )}
         </Section>
 
         {video && (
           <Section title="Analysis Configuration">
-            <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) }))} />
-            <ConfigRow label="Max samples" value={config.max_samples} onChange={(v) => setConfig((c) => ({ ...c, max_samples: parseInt(v) }))} />
+            <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
+            <ConfigRow label="Max samples" value={config.max_samples} onChange={(v) => setConfig((c) => ({ ...c, max_samples: parseInt(v) || 1 }))} />
             <button onClick={handleAnalyze} disabled={analyzing} className="mt-3 w-full py-2 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-50">
               {analyzing ? "Analyzing..." : "Run Analysis"}
             </button>
@@ -125,40 +139,59 @@ function VideoAnalysis() {
 
       {/* Right: Preview & Results */}
       <div className="w-1/2 p-4 overflow-y-auto space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xs font-semibold text-zinc-100">Preview</h3>
-          <div className="flex gap-1">
-            {["raw", "annotated"].map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setPreviewMode(mode)}
-                className={`px-2.5 py-1 rounded-md border text-[9px] capitalize ${
-                  previewMode === mode
-                    ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                    : "text-zinc-600 border-zinc-800"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h3 className="text-xs font-semibold text-zinc-100">Video Preview</h3>
         <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
-          {video ? (
-            <img src={api.videoStreamUrl(video.id, previewMode === "annotated")} alt="Preview" className="w-full h-full object-contain" />
+          {localUrl ? (
+            <video
+              src={video ? api.videoFileUrl(video.id) : localUrl}
+              controls
+              className="w-full h-full object-contain"
+            />
           ) : (
-            <span className="text-[10px] text-zinc-700">Upload a video to preview</span>
+            <span className="text-[10px] text-zinc-700">Select a video to preview</span>
           )}
         </div>
 
         {results && (
-          <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
-            <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
-            <ResultRow label="Frames analyzed" value={`${results.frames_analyzed} / ${results.frames_total}`} />
-            {summarizeResults(results.results).map(({ key, count }) => (
-              <ResultRow key={key} label={`${key} detections`} value={`${count}`} variant={count > 0 ? "danger" : "ok"} />
-            ))}
-          </div>
+          <>
+            <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
+              <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
+              <ResultRow label="Frames analyzed" value={`${results.frames_analyzed} / ${results.frames_total}`} />
+              {summarizeResults(results.results).map(({ key, count, total }) => (
+                <ResultRow key={key} label={`${key} detections`} value={`${count} / ${total} frames`} variant={count > 0 ? "danger" : "ok"} />
+              ))}
+              {summarizeResults(results.results).length === 0 && (
+                <ResultRow label="No detections" value="All clear" variant="ok" />
+              )}
+            </div>
+
+            {/* Per-frame breakdown */}
+            <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
+              <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Per-Frame Results</h4>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {results.results.map((fr) => (
+                  <div key={fr.frame} className="flex items-center gap-2 text-[9px] py-1 border-b border-zinc-800/40">
+                    <span className="text-zinc-600 font-mono w-16 shrink-0">Frame {fr.frame}</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {Object.entries(fr.detections || {}).map(([key, det]) => (
+                        <span
+                          key={key}
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-medium ${
+                            det.detected
+                              ? "bg-red-500/15 text-red-400"
+                              : "bg-green-500/10 text-green-500"
+                          }`}
+                        >
+                          {key}: {det.detected ? "detected" : "clear"}
+                          {det.confidence != null ? ` (${(det.confidence * 100).toFixed(0)}%)` : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
