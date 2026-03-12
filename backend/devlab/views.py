@@ -1,6 +1,7 @@
 import os
 import time
 import uuid
+import threading
 import cv2
 import psutil
 from django.conf import settings
@@ -54,7 +55,11 @@ def video_file(request, video_id):
 @api_view(['GET'])
 def video_stream(request, video_id):
     """Stream video as MJPEG.  With ?annotated=1 each frame is run through
-    enabled models and bounding boxes / landmarks are drawn on top."""
+    enabled models and bounding boxes / landmarks are drawn on top.
+
+    Model loading happens in a background thread so the stream starts
+    immediately with raw frames; annotations appear once models are ready.
+    All frames are paced to the video's native FPS."""
     video = DevVideo.objects.get(pk=video_id)
     annotated = request.query_params.get('annotated', '0') == '1'
     overlays = request.query_params.get('overlays', '')
@@ -65,40 +70,53 @@ def video_stream(request, video_id):
 
         cap = cv2.VideoCapture(video.file_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
-        frame_delay = 1.0 / min(fps, 30)  # cap at 30 fps
+        frame_delay = 1.0 / min(fps, 30)
 
-        svc = get_inference_service() if annotated else None
         overlay_set = set(filter(None, overlays.split(','))) if overlays else None
-        enabled = None
-        if annotated:
-            enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
+        enabled = set(
+            ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True)
+        ) if annotated else set()
+
+        # Kick off model loading in background so raw frames stream immediately
+        svc = get_inference_service() if annotated else None
+        if svc and not svc.ready:
+            threading.Thread(target=svc.preload, daemon=True).start()
 
         cached = {}
         frame_idx = 0
-        INFER_EVERY = 3  # run models every N frames
+        INFER_EVERY = 3
 
         while cap.isOpened():
+            frame_start = time.monotonic()
+
             ret, frame = cap.read()
             if not ret:
                 break
 
-            if annotated and svc and enabled:
-                if frame_idx % INFER_EVERY == 0 or not cached:
-                    new = {}
-                    for key in enabled:
-                        new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
-                    cached.clear()
-                    cached.update(new)
-                frame = draw_annotations(frame, cached, enabled_overlays=overlay_set)
+            display = frame
 
-            _, buf = cv2.imencode('.jpg', frame)
+            if annotated and svc and svc.ready and enabled:
+                try:
+                    if frame_idx % INFER_EVERY == 0 or not cached:
+                        new = {}
+                        for key in enabled:
+                            new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
+                        cached.clear()
+                        cached.update(new)
+                    display = draw_annotations(frame, cached, enabled_overlays=overlay_set)
+                except Exception:
+                    pass
+
+            _, buf = cv2.imencode('.jpg', display)
             if buf is not None:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
 
-            # Pace the stream when NOT doing inference (inference is naturally slow)
-            if not annotated:
-                time.sleep(frame_delay)
+            # Always pace to real-time FPS, accounting for processing time
+            elapsed = time.monotonic() - frame_start
+            remaining = frame_delay - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
             frame_idx += 1
 

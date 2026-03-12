@@ -1,6 +1,6 @@
-import cv2
-from django.http import StreamingHttpResponse, JsonResponse
-from rest_framework import viewsets, status
+import threading
+from django.http import StreamingHttpResponse
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Camera
@@ -9,15 +9,16 @@ from .services import get_camera_service
 
 
 def _make_annotator(camera_id, overlays_csv):
-    """Return a function(frame)->frame that runs inference and draws annotations.
-    Results are cached and re-run every INFERENCE_INTERVAL frames."""
+    """Return a function(frame)->frame that runs inference and draws
+    annotations.  Results are cached and re-run every INFERENCE_INTERVAL
+    frames.  Returns None while models are still loading (non-blocking)."""
     from detection.services import get_inference_service
     from detection.models import ModelSetting, CameraModel
     from annotation import draw_annotations
 
     overlay_set = set(filter(None, overlays_csv.split(','))) if overlays_csv else None
 
-    # Resolve which models are enabled for this camera
+    # Resolve enabled models for this camera
     enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
     for ov in CameraModel.objects.filter(camera_id=camera_id):
         if ov.is_enabled:
@@ -26,19 +27,31 @@ def _make_annotator(camera_id, overlays_csv):
             enabled.discard(ov.model_setting_id)
 
     svc = get_inference_service()
+
+    # Kick off model loading in background so live frames are never blocked
+    if not svc.ready:
+        threading.Thread(target=svc.preload, daemon=True).start()
+
     cached = {}
     counter = [0]
     INFERENCE_INTERVAL = 3
 
     def annotate(frame):
+        # While models are still loading, return raw frame
+        if not svc.ready:
+            return frame
+
         counter[0] += 1
-        if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
-            new = {}
-            for key in enabled:
-                new[key] = svc.run_inference_on_frame(key, frame, camera_id=camera_id)
-            cached.clear()
-            cached.update(new)
-        return draw_annotations(frame, cached, enabled_overlays=overlay_set)
+        try:
+            if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
+                new = {}
+                for key in enabled:
+                    new[key] = svc.run_inference_on_frame(key, frame, camera_id=camera_id)
+                cached.clear()
+                cached.update(new)
+            return draw_annotations(frame, cached, enabled_overlays=overlay_set)
+        except Exception:
+            return frame  # raw frame on any inference error
 
     return annotate
 

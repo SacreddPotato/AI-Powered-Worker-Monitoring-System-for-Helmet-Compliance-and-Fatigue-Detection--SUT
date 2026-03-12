@@ -2,11 +2,22 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
 
-const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning", "Performance"];
+const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
 const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
 
 export default function DevLabPage() {
   const [activeTab, setActiveTab] = useState(0);
+  const [visited, setVisited] = useState(new Set([0]));
+
+  function switchTab(i) {
+    setActiveTab(i);
+    setVisited((prev) => {
+      if (prev.has(i)) return prev;
+      const next = new Set(prev);
+      next.add(i);
+      return next;
+    });
+  }
 
   return (
     <>
@@ -21,7 +32,7 @@ export default function DevLabPage() {
         {TABS.map((tab, i) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(i)}
+            onClick={() => switchTab(i)}
             className={`px-4 py-2.5 text-[11px] border-b-2 -mb-px transition-colors ${
               activeTab === i
                 ? "text-blue-400 border-blue-500"
@@ -33,15 +44,34 @@ export default function DevLabPage() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 0 && <VideoAnalysis />}
-        {activeTab === 1 && <LiveCameraTest />}
-        {activeTab === 2 && <ThresholdTuning />}
-        {activeTab === 3 && <PerformanceTab />}
+      {/* Tab panels stay mounted (hidden via CSS) so streams aren't killed */}
+      <div className="flex-1 overflow-hidden relative">
+        {visited.has(0) && (
+          <div className={`h-full ${activeTab === 0 ? "" : "hidden"}`}>
+            <VideoAnalysis />
+          </div>
+        )}
+        {visited.has(1) && (
+          <div className={`h-full ${activeTab === 1 ? "" : "hidden"}`}>
+            <LiveCameraTest />
+          </div>
+        )}
+        {visited.has(2) && (
+          <div className={`h-full ${activeTab === 2 ? "" : "hidden"}`}>
+            <ThresholdTuning />
+          </div>
+        )}
+
+        {/* Floating performance monitor — always visible */}
+        <PerfMonitor />
       </div>
     </>
   );
 }
+
+// ============================================================
+// Video Analysis
+// ============================================================
 
 function VideoAnalysis() {
   const [file, setFile] = useState(null);
@@ -54,7 +84,6 @@ function VideoAnalysis() {
   const [logs, setLogs] = useState([]);
   const [config, setConfig] = useState({ sample_every_n_frames: 10, max_samples: 50 });
   const fileRef = useRef();
-  const streamRef = useRef();
 
   function addLog(level, msg) {
     const ts = new Date().toLocaleTimeString();
@@ -115,7 +144,6 @@ function VideoAnalysis() {
     addLog("info", "Stream stopped");
   }
 
-  // When stream img errors (connection closed = video ended), mark done
   function handleStreamEnd() {
     if (streamActive) {
       setStreamActive(false);
@@ -214,13 +242,11 @@ function VideoAnalysis() {
       <div className="w-1/2 p-4 overflow-y-auto space-y-4">
         <h3 className="text-xs font-semibold text-zinc-100">
           {streamActive ? "Annotated Stream" : "Video Preview"}
-          {streamActive && <span className="ml-2 text-[9px] text-red-400 animate-pulse">ANALYZING</span>}
+          {streamActive && <span className="ml-2 text-[9px] text-red-400 animate-pulse">LIVE</span>}
         </h3>
         <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
           {streamActive && video ? (
-            /* Annotated MJPEG stream — bounding boxes drawn server-side */
             <img
-              ref={streamRef}
               src={api.videoStreamUrl(video.id, overlays)}
               alt="Annotated analysis"
               className="w-full h-full object-contain"
@@ -242,8 +268,8 @@ function VideoAnalysis() {
             <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
               <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
               <ResultRow label="Frames analyzed" value={`${results.frames_analyzed} / ${results.frames_total}`} />
-              {summarizeResults(results.results).map(({ key, count, total }) => (
-                <ResultRow key={key} label={`${key} detections`} value={`${count} / ${total} frames`} variant={count > 0 ? "danger" : "ok"} />
+              {summarizeResults(results.results).map(({ key, count }) => (
+                <ResultRow key={key} label={`${key} detections`} value={`${count} frames`} variant={count > 0 ? "danger" : "ok"} />
               ))}
               {summarizeResults(results.results).length === 0 && (
                 <ResultRow label="No detections" value="All clear" variant="ok" />
@@ -281,6 +307,10 @@ function VideoAnalysis() {
     </div>
   );
 }
+
+// ============================================================
+// Live Camera Test
+// ============================================================
 
 function LiveCameraTest() {
   const [cameras, setCameras] = useState([]);
@@ -333,6 +363,10 @@ function LiveCameraTest() {
   );
 }
 
+// ============================================================
+// Threshold Tuning
+// ============================================================
+
 function ThresholdTuning() {
   const [thresholds, setThresholds] = useState(null);
 
@@ -361,12 +395,17 @@ function ThresholdTuning() {
   );
 }
 
-function PerformanceTab() {
+// ============================================================
+// Floating Performance Monitor
+// ============================================================
+
+function PerfMonitor() {
+  const [open, setOpen] = useState(false);
   const [perf, setPerf] = useState(null);
 
   useEffect(() => {
     loadPerf();
-    const interval = setInterval(loadPerf, 2000);
+    const interval = setInterval(loadPerf, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -374,21 +413,52 @@ function PerformanceTab() {
     api.getPerformance().then(setPerf).catch(() => {});
   }
 
-  if (!perf) return <div className="p-5 text-zinc-600 text-xs">Loading...</div>;
+  if (!perf) return null;
 
   return (
-    <div className="p-5">
-      <div className="grid grid-cols-2 gap-3 max-w-md">
-        <PerfCard label="CPU Usage" value={`${perf.cpu_percent}%`} good={perf.cpu_percent < 80} />
-        <PerfCard label="Memory" value={`${perf.memory_mb}MB`} good={perf.memory_mb < 4000} />
-        <PerfCard label="GPU Available" value={perf.gpu_available ? "Yes" : "No"} good={perf.gpu_available} />
-        <PerfCard label="GPU Usage" value={perf.gpu_percent >= 0 ? `${perf.gpu_percent}%` : "N/A"} good={perf.gpu_percent < 80} />
-      </div>
+    <div className="absolute bottom-3 right-3 z-30">
+      {open ? (
+        <div className="bg-[#0c0c0f]/95 backdrop-blur border border-zinc-800 rounded-lg p-3 w-56 animate-slide-in">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[9px] text-zinc-500 uppercase tracking-wider font-semibold">System</span>
+            <button onClick={() => setOpen(false)} className="text-zinc-600 hover:text-zinc-400 text-[10px]">
+              <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <MiniStat label="CPU" value={`${perf.cpu_percent}%`} good={perf.cpu_percent < 80} />
+            <MiniStat label="RAM" value={`${perf.memory_mb}MB`} good={perf.memory_mb < 4000} />
+            <MiniStat label="GPU" value={perf.gpu_available ? "Yes" : "No"} good={perf.gpu_available} />
+            <MiniStat label="GPU %" value={perf.gpu_percent >= 0 ? `${perf.gpu_percent}%` : "N/A"} good={perf.gpu_percent < 80} />
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-2 bg-[#0c0c0f]/90 backdrop-blur border border-zinc-800 rounded-lg px-3 py-1.5 hover:border-zinc-700 transition-colors"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${perf.cpu_percent < 80 ? "bg-green-500" : "bg-amber-500"}`} />
+          <span className="text-[9px] text-zinc-500 font-mono">
+            CPU {perf.cpu_percent}% &middot; {perf.memory_mb}MB
+          </span>
+        </button>
+      )}
     </div>
   );
 }
 
-// ---- Shared sub-components ----
+function MiniStat({ label, value, good }) {
+  return (
+    <div className="text-center">
+      <div className={`text-sm font-bold font-mono ${good ? "text-green-400" : "text-amber-400"}`}>{value}</div>
+      <div className="text-[8px] text-zinc-600 uppercase">{label}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// Shared sub-components
+// ============================================================
 
 function Section({ title, children }) {
   return (
@@ -435,15 +505,6 @@ function ResultRow({ label, value, variant }) {
     <div className="flex justify-between py-1 text-[10px]">
       <span className="text-zinc-500">{label}</span>
       <span className={`font-mono ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-function PerfCard({ label, value, good }) {
-  return (
-    <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3 text-center">
-      <div className={`text-xl font-bold font-mono ${good ? "text-green-400" : "text-amber-400"}`}>{value}</div>
-      <div className="text-[9px] text-zinc-600 uppercase tracking-wider mt-0.5">{label}</div>
     </div>
   );
 }
