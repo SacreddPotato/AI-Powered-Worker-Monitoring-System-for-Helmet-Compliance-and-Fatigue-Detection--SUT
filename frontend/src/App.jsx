@@ -4,11 +4,9 @@ import IconRail from "./components/IconRail";
 import Toast from "./components/Toast";
 import { createAlertSocket } from "./ws";
 import { api } from "./api";
+import FeedsPage from "./pages/FeedsPage";
 
-// Lazy page placeholders (will be built in Tasks 9-13)
-function FeedsPage() {
-  return <div className="flex-1 flex items-center justify-center text-zinc-600">Feeds — coming next</div>;
-}
+// Lazy page placeholders (will be built in Tasks 11-13)
 function AlertsPage() {
   return <div className="flex-1 flex items-center justify-center text-zinc-600">Alerts — coming next</div>;
 }
