@@ -1,31 +1,32 @@
-# Use Miniconda (which has the pre-compiled binaries we need)
 FROM continuumio/miniconda3
 
-WORKDIR /code
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# 1. Install System Deps (OpenCV still needs these)
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
-
-# 2. Install dlib from Conda-Forge (PRE-COMPILED! No building!)
-# This takes seconds, not minutes.
+# Install dlib via conda
 RUN conda install -y -c conda-forge dlib
 
-# 3. Copy requirements (BUT REMOVE 'dlib' FROM IT FIRST)
-COPY requirements.txt .
+# Copy project
+COPY . /app
+WORKDIR /app
 
-# 4. Install the rest of your app using pip
-# (We use --ignore-installed to stop pip from fighting with Conda)
-RUN pip install --no-cache-dir --ignore-installed -r requirements.txt
+# Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Frontend build
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    cd frontend && npm ci && npm run build
 
-# Create uploads folder
-RUN mkdir -p backend/uploads && chmod 777 backend/uploads
+# Django setup
+WORKDIR /app/backend
+RUN python manage.py collectstatic --noinput 2>/dev/null; true
+
+# Uploads directory
+RUN mkdir -p uploads/dev_videos && chmod -R 777 uploads
 
 EXPOSE 7860
 
-# We use 'python' provided by Conda
-CMD ["python", "backend/app.py"]
+CMD ["daphne", "-b", "0.0.0.0", "-p", "7860", "sentinel.asgi:application"]
