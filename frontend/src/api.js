@@ -1,5 +1,12 @@
 const BASE = "/api/v1";
 
+// MJPEG streams must bypass the Vite dev proxy which buffers the entire
+// multipart response (frames arrive all at once instead of streaming).
+// In production the frontend is served by Django, so same-origin works.
+const STREAM_BASE = import.meta.env.DEV
+  ? `http://${window.location.hostname}:7860/api/v1`
+  : "/api/v1";
+
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...options.headers },
@@ -18,9 +25,6 @@ export const api = {
   cameraStatus: (id) => request(`/cameras/${id}/status/`),
   discoverDevices: () => request("/cameras/discover/"),
 
-  /** Build MJPEG stream URL with optional annotation overlays.
-   *  @param {number} id - camera id
-   *  @param {string[]} overlays - model keys to draw, e.g. ['helmet','fatigue'] (empty = raw) */
   cameraStreamUrl: (id, overlays = []) => {
     const params = new URLSearchParams();
     if (overlays.length > 0) {
@@ -28,7 +32,7 @@ export const api = {
       params.set("overlays", overlays.join(","));
     }
     const qs = params.toString();
-    return `${BASE}/cameras/${id}/stream/${qs ? "?" + qs : ""}`;
+    return `${STREAM_BASE}/cameras/${id}/stream/${qs ? "?" + qs : ""}`;
   },
 
   // Models
@@ -54,11 +58,8 @@ export const api = {
     return fetch(`${BASE}/dev/videos/`, { method: "POST", body: form }).then((r) => r.json());
   },
   listVideos: () => request("/dev/videos/"),
-  videoFileUrl: (id) => `${BASE}/dev/videos/${id}/file/`,
+  videoFileUrl: (id) => `${STREAM_BASE}/dev/videos/${id}/file/`,
 
-  /** Build annotated MJPEG stream URL for a dev video.
-   *  @param {number} id - video id
-   *  @param {string[]} overlays - model keys (empty = raw stream) */
   videoStreamUrl: (id, overlays = []) => {
     const params = new URLSearchParams();
     if (overlays.length > 0) {
@@ -66,7 +67,7 @@ export const api = {
       params.set("overlays", overlays.join(","));
     }
     const qs = params.toString();
-    return `${BASE}/dev/videos/${id}/stream/${qs ? "?" + qs : ""}`;
+    return `${STREAM_BASE}/dev/videos/${id}/stream/${qs ? "?" + qs : ""}`;
   },
 
   analyzeVideo: (id, opts) => request(`/dev/videos/${id}/analyze/`, { method: "POST", body: JSON.stringify(opts) }),

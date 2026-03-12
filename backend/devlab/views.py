@@ -194,23 +194,55 @@ def thresholds_view(request):
 
     return Response({'status': 'updated'})
 
+def _gpu_stats():
+    """Get GPU utilisation via nvidia-smi (works reliably on Windows)."""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ['nvidia-smi',
+             '--query-gpu=utilization.gpu,memory.used,memory.total',
+             '--format=csv,noheader,nounits'],
+            capture_output=True, text=True, timeout=3,
+        )
+        if r.returncode == 0:
+            parts = r.stdout.strip().split(',')
+            return {
+                'gpu_available': True,
+                'gpu_percent': float(parts[0].strip()),
+                'gpu_mem_used_mb': round(float(parts[1].strip()), 0),
+                'gpu_mem_total_mb': round(float(parts[2].strip()), 0),
+            }
+    except Exception:
+        pass
+    # Fallback: torch.cuda
+    try:
+        import torch
+        if torch.cuda.is_available():
+            pct = -1
+            if hasattr(torch.cuda, 'utilization'):
+                try:
+                    pct = torch.cuda.utilization()
+                except Exception:
+                    pass
+            return {
+                'gpu_available': True,
+                'gpu_percent': pct,
+                'gpu_mem_used_mb': round(torch.cuda.memory_allocated() / 1024 / 1024, 0),
+                'gpu_mem_total_mb': round(torch.cuda.get_device_properties(0).total_mem / 1024 / 1024, 0),
+            }
+    except Exception:
+        pass
+    return {'gpu_available': False, 'gpu_percent': -1, 'gpu_mem_used_mb': 0, 'gpu_mem_total_mb': 0}
+
+
 @api_view(['GET'])
 def performance_view(request):
-    import torch
-    gpu_available = torch.cuda.is_available()
-    gpu_percent = 0
-    if gpu_available:
-        try:
-            gpu_percent = torch.cuda.utilization()
-        except Exception:
-            gpu_percent = -1
-
     process = psutil.Process()
     mem = process.memory_info()
+    gpu = _gpu_stats()
 
     return Response({
-        'cpu_percent': psutil.cpu_percent(interval=0.1),
+        'cpu_percent': psutil.cpu_percent(interval=0),
         'memory_mb': round(mem.rss / 1024 / 1024, 1),
-        'gpu_available': gpu_available,
-        'gpu_percent': gpu_percent,
+        **gpu,
     })

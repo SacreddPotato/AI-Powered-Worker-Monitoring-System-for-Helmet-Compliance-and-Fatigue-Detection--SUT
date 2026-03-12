@@ -79,6 +79,7 @@ function VideoAnalysis() {
   const [video, setVideo] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [streamActive, setStreamActive] = useState(false);
+  const [streamDone, setStreamDone] = useState(false);
   const [results, setResults] = useState(null);
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [logs, setLogs] = useState([]);
@@ -120,6 +121,7 @@ function VideoAnalysis() {
   function handleAnalyzeStream() {
     if (!video || overlays.length === 0) return;
     setStreamActive(true);
+    setStreamDone(false);
     setResults(null);
     addLog("info", `Streaming annotated analysis — overlays: ${overlays.join(", ")}`);
   }
@@ -147,6 +149,7 @@ function VideoAnalysis() {
   function handleStreamEnd() {
     if (streamActive) {
       setStreamActive(false);
+      setStreamDone(true);
       addLog("ok", "Annotated stream complete");
     }
   }
@@ -244,7 +247,7 @@ function VideoAnalysis() {
           {streamActive ? "Annotated Stream" : "Video Preview"}
           {streamActive && <span className="ml-2 text-[9px] text-red-400 animate-pulse">LIVE</span>}
         </h3>
-        <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+        <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden relative">
           {streamActive && video ? (
             <img
               src={api.videoStreamUrl(video.id, overlays)}
@@ -260,6 +263,17 @@ function VideoAnalysis() {
             />
           ) : (
             <span className="text-[10px] text-zinc-700">Select a video to preview</span>
+          )}
+          {streamDone && !streamActive && (
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
+              <span className="text-[11px] text-zinc-300">Stream complete</span>
+              <button
+                onClick={handleAnalyzeStream}
+                className="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-[10px] font-semibold border border-blue-500/30 hover:bg-blue-500/30"
+              >
+                Restart Analysis
+              </button>
+            </div>
           )}
         </div>
 
@@ -428,8 +442,8 @@ function PerfMonitor() {
           <div className="grid grid-cols-2 gap-2">
             <MiniStat label="CPU" value={`${perf.cpu_percent}%`} good={perf.cpu_percent < 80} />
             <MiniStat label="RAM" value={`${perf.memory_mb}MB`} good={perf.memory_mb < 4000} />
-            <MiniStat label="GPU" value={perf.gpu_available ? "Yes" : "No"} good={perf.gpu_available} />
-            <MiniStat label="GPU %" value={perf.gpu_percent >= 0 ? `${perf.gpu_percent}%` : "N/A"} good={perf.gpu_percent < 80} />
+            <MiniStat label="GPU" value={perf.gpu_percent >= 0 ? `${perf.gpu_percent}%` : perf.gpu_available ? "idle" : "N/A"} good={perf.gpu_available && perf.gpu_percent < 80} />
+            <MiniStat label="VRAM" value={perf.gpu_mem_used_mb > 0 ? `${perf.gpu_mem_used_mb}/${perf.gpu_mem_total_mb}` : "N/A"} good={perf.gpu_available} />
           </div>
         </div>
       ) : (
@@ -439,7 +453,7 @@ function PerfMonitor() {
         >
           <span className={`w-1.5 h-1.5 rounded-full ${perf.cpu_percent < 80 ? "bg-green-500" : "bg-amber-500"}`} />
           <span className="text-[9px] text-zinc-500 font-mono">
-            CPU {perf.cpu_percent}% &middot; {perf.memory_mb}MB
+            CPU {perf.cpu_percent}%{perf.gpu_percent >= 0 ? ` · GPU ${perf.gpu_percent}%` : ""} · {perf.memory_mb}MB
           </span>
         </button>
       )}
