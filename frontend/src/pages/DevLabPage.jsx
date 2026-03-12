@@ -70,21 +70,159 @@ export default function DevLabPage() {
 }
 
 // ============================================================
-// Video Analysis
+// Client-side canvas annotation drawing
+// ============================================================
+
+const ANNO_COLORS = {
+  helmet: "rgb(80,200,0)",
+  fatigue: "rgb(255,140,0)",
+  vest: "rgb(50,160,255)",
+  gloves: "rgb(255,220,0)",
+  goggles: "rgb(0,200,220)",
+  red: "rgb(255,60,0)",
+  green: "rgb(80,200,0)",
+  blue: "rgb(50,160,255)",
+  yellow: "rgb(255,220,0)",
+  cyan: "rgb(0,200,220)",
+  orange: "rgb(255,140,0)",
+  white: "rgb(255,255,255)",
+};
+
+function drawPPEBoxes(ctx, payload, modelKey, tx, ty, s) {
+  const defaultColor = ANNO_COLORS[modelKey] || ANNO_COLORS.white;
+  for (const box of payload.boxes || []) {
+    const x1 = tx(box.x1), y1 = ty(box.y1);
+    const x2 = tx(box.x2), y2 = ty(box.y2);
+    const label = box.label || modelKey;
+    const color = ANNO_COLORS[box.color] || defaultColor;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+    const fontSize = Math.max(10, Math.round(12 * s));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tm = ctx.measureText(label);
+    const lh = fontSize + 4;
+    ctx.fillStyle = color;
+    ctx.fillRect(x1, y1 - lh, tm.width + 8, lh);
+    ctx.fillStyle = "#000";
+    ctx.fillText(label, x1 + 4, y1 - 3);
+  }
+}
+
+function drawFatigue(ctx, payload, tx, ty, s) {
+  const color = ANNO_COLORS.fatigue;
+  const isFatigued = payload.is_fatigued;
+  const boxColor = isFatigued ? ANNO_COLORS.red : color;
+  const faceBox = payload.face_box;
+
+  if (faceBox) {
+    const x1 = tx(faceBox.x1), y1 = ty(faceBox.y1);
+    const x2 = tx(faceBox.x2), y2 = ty(faceBox.y2);
+    ctx.strokeStyle = boxColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+    const hybrid = payload.hybrid_score || 0;
+    const tag = isFatigued ? "FATIGUED" : "Alert";
+    const label = `${tag} (${Math.round(hybrid * 100)}%)`;
+    const fontSize = Math.max(10, Math.round(12 * s));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    const tm = ctx.measureText(label);
+    const lh = fontSize + 4;
+    ctx.fillStyle = boxColor;
+    ctx.fillRect(x1, y1 - lh, tm.width + 8, lh);
+    ctx.fillStyle = "#000";
+    ctx.fillText(label, x1 + 4, y1 - 3);
+  }
+
+  ctx.fillStyle = color;
+  for (const pt of payload.landmarks || []) {
+    if (pt.length >= 2) {
+      ctx.beginPath();
+      ctx.arc(tx(pt[0]), ty(pt[1]), Math.max(1, 1.5 * s), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  const pose = payload.pose_line;
+  if (pose) {
+    const sx = tx(pose.start[0]), sy = ty(pose.start[1]);
+    const ex = tx(pose.end[0]), ey = ty(pose.end[1]);
+    ctx.strokeStyle = ANNO_COLORS.cyan;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    const angle = Math.atan2(ey - sy, ex - sx);
+    const tipLen = 8 * s;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - tipLen * Math.cos(angle - 0.4), ey - tipLen * Math.sin(angle - 0.4));
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - tipLen * Math.cos(angle + 0.4), ey - tipLen * Math.sin(angle + 0.4));
+    ctx.stroke();
+  }
+
+  if (faceBox) {
+    const lines = [];
+    if (payload.ear != null) lines.push(`EAR ${payload.ear.toFixed(2)}`);
+    if (payload.mar != null) lines.push(`MAR ${payload.mar.toFixed(2)}`);
+    if (payload.head_tilt_degrees != null) lines.push(`Tilt ${payload.head_tilt_degrees.toFixed(1)}`);
+    const mfs = Math.max(9, Math.round(11 * s));
+    ctx.font = `${mfs}px monospace`;
+    ctx.fillStyle = color;
+    const xT = tx(faceBox.x2) + 5;
+    let yT = ty(faceBox.y1) + 14 * s;
+    for (const txt of lines) {
+      ctx.fillText(txt, xT, yT);
+      yT += 16 * s;
+    }
+  }
+}
+
+// ============================================================
+// Video Analysis — live WebSocket streaming
 // ============================================================
 
 function VideoAnalysis() {
   const [file, setFile] = useState(null);
   const [localUrl, setLocalUrl] = useState(null);
   const [video, setVideo] = useState(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [streamActive, setStreamActive] = useState(false);
-  const [streamDone, setStreamDone] = useState(false);
-  const [results, setResults] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [logs, setLogs] = useState([]);
-  const [config, setConfig] = useState({ sample_every_n_frames: 10, max_samples: 50 });
+  const [config, setConfig] = useState({ sample_every_n_frames: 3 });
+  const [videoDone, setVideoDone] = useState(false);
+
   const fileRef = useRef();
+  const videoRef = useRef();
+  const canvasRef = useRef();
+  const animRef = useRef();
+  const wsRef = useRef(null);
+  const overlaysRef = useRef(overlays);
+
+  // Live analysis data stored in refs (updated by WS, read by draw loop)
+  const frameMapRef = useRef(new Map());
+  const sortedFramesRef = useRef([]);
+  const fpsRef = useRef(30);
+  const runningRef = useRef(false);
+  const analysisDoneRef = useRef(false);
+  const playbarRef = useRef();
+
+  useEffect(() => { overlaysRef.current = overlays; }, [overlays]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      stopDrawLoop();
+    };
+  }, []);
 
   function addLog(level, msg) {
     const ts = new Date().toLocaleTimeString();
@@ -95,13 +233,26 @@ function VideoAnalysis() {
     setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
+  function stopDrawLoop() {
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+    const c = canvasRef.current;
+    if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  }
+
   function handleFileSelect(e) {
     const f = e.target.files[0];
     if (!f) return;
+    handleStop();
     setFile(f);
     setVideo(null);
-    setResults(null);
-    setStreamActive(false);
+    setAnalysisData(null);
+    setProgress(null);
+    setVideoDone(false);
+    frameMapRef.current.clear();
+    sortedFramesRef.current = [];
     if (localUrl) URL.revokeObjectURL(localUrl);
     setLocalUrl(URL.createObjectURL(f));
   }
@@ -118,41 +269,208 @@ function VideoAnalysis() {
     }
   }
 
-  function handleAnalyzeStream() {
-    if (!video || overlays.length === 0) return;
-    setStreamActive(true);
-    setStreamDone(false);
-    setResults(null);
-    addLog("info", `Streaming annotated analysis — overlays: ${overlays.join(", ")}`);
-  }
-
-  async function handleAnalyzeJson() {
+  function handleStart() {
     if (!video) return;
-    setAnalyzing(true);
-    setResults(null);
-    addLog("info", `JSON analysis — ${config.max_samples} samples @ every ${config.sample_every_n_frames} frames`);
-    try {
-      const r = await api.analyzeVideo(video.id, config);
-      setResults(r);
-      addLog("ok", `Analysis complete — ${r.frames_analyzed}/${r.frames_total} frames`);
-    } catch (err) {
-      addLog("err", `Analysis failed: ${err.message}`);
-    }
-    setAnalyzing(false);
+
+    // Reset previous analysis
+    frameMapRef.current.clear();
+    sortedFramesRef.current = [];
+    setAnalysisData(null);
+    setProgress({ analyzed: 0, total: 0 });
+    setVideoDone(false);
+    setRunning(true);
+    runningRef.current = true;
+    analysisDoneRef.current = false;
+    stopDrawLoop();
+
+    // Close any existing socket
+    if (wsRef.current) wsRef.current.close();
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/video-analysis/`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        action: "start",
+        video_id: video.id,
+        sample_every_n_frames: config.sample_every_n_frames,
+      }));
+      addLog("info", `Live analysis started — sampling every ${config.sample_every_n_frames} frames`);
+    };
+
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+
+      if (data.type === "init") {
+        fpsRef.current = data.fps;
+        setProgress((p) => ({ ...p, total: data.total_frames }));
+        addLog("info", `${data.total_frames} frames @ ${data.fps} FPS — models: ${data.enabled_models.join(", ")}`);
+        // Video stays paused — draw loop sync will play it once buffer is ready
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+        }
+        startDrawLoop();
+      }
+
+      if (data.type === "frame") {
+        frameMapRef.current.set(data.frame, data.detections);
+        sortedFramesRef.current.push(data.frame);
+        setProgress((p) => ({ ...p, analyzed: (p?.analyzed || 0) + 1 }));
+
+        // Resume video if paused and we have >= 1 second of buffer ahead
+        const vid = videoRef.current;
+        if (vid && vid.paused && !vid.ended) {
+          const bufferAhead = (data.frame / fpsRef.current) - vid.currentTime;
+          if (bufferAhead >= 1.0) {
+            vid.play();
+          }
+        }
+      }
+
+      if (data.type === "done") {
+        analysisDoneRef.current = true;
+        // All frames analyzed — let video play freely to the end
+        const vid = videoRef.current;
+        if (vid && vid.paused && !vid.ended) vid.play();
+
+        const results = sortedFramesRef.current.map((f) => ({
+          frame: f,
+          detections: frameMapRef.current.get(f),
+        }));
+        setAnalysisData({
+          fps: fpsRef.current,
+          frames_total: data.frames_total,
+          frames_analyzed: data.frames_analyzed,
+          results,
+        });
+        setRunning(false);
+        runningRef.current = false;
+        addLog("ok", `Complete — ${data.frames_analyzed}/${data.frames_total} frames analyzed`);
+      }
+
+      if (data.type === "error") {
+        setRunning(false);
+        runningRef.current = false;
+        addLog("err", `Analysis error: ${data.message}`);
+      }
+    };
+
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+
+    ws.onerror = () => {
+      setRunning(false);
+      addLog("err", "WebSocket connection failed");
+    };
   }
 
-  function handleStopStream() {
-    setStreamActive(false);
-    addLog("info", "Stream stopped");
+  function handleStop() {
+    if (wsRef.current) {
+      try { wsRef.current.send(JSON.stringify({ action: "stop" })); } catch {}
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.pause();
+    setRunning(false);
+    runningRef.current = false;
+    addLog("info", "Analysis stopped");
   }
 
-  function handleStreamEnd() {
-    if (streamActive) {
-      setStreamActive(false);
-      setStreamDone(true);
-      addLog("ok", "Annotated stream complete");
-    }
+  function handleRestart() {
+    setVideoDone(false);
+    handleStart();
   }
+
+  // --- Canvas draw loop ---
+  function startDrawLoop() {
+    stopDrawLoop();
+    const vid = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!vid || !canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Update playback position bar
+      if (playbarRef.current && vid.duration) {
+        playbarRef.current.style.width = `${(vid.currentTime / vid.duration) * 100}%`;
+      }
+
+      const vW = vid.videoWidth;
+      const vH = vid.videoHeight;
+      if (vW && vH) {
+        const fps = fpsRef.current;
+        const currentFrame = Math.floor(vid.currentTime * fps);
+
+        // --- SYNC: pause video if it has caught up to the analysis frontier ---
+        if (runningRef.current && !analysisDoneRef.current) {
+          const frames = sortedFramesRef.current;
+          if (frames.length > 0) {
+            const latestAnalyzedTime = frames[frames.length - 1] / fps;
+            const bufferAhead = latestAnalyzedTime - vid.currentTime;
+            if (!vid.paused && bufferAhead < 0.15) {
+              vid.pause();
+            }
+          }
+        }
+
+        const nearest = findNearest(sortedFramesRef.current, currentFrame);
+
+        if (nearest !== null) {
+          const detections = frameMapRef.current.get(nearest);
+          if (detections) {
+            const scale = Math.min(canvas.width / vW, canvas.height / vH);
+            const offX = (canvas.width - vW * scale) / 2;
+            const offY = (canvas.height - vH * scale) / 2;
+            const tx = (x) => offX + x * scale;
+            const ty = (y) => offY + y * scale;
+
+            const active = overlaysRef.current;
+            for (const [key, det] of Object.entries(detections)) {
+              if (!active.includes(key)) continue;
+              if (det.status !== "ok") continue;
+              const payload = det.payload || {};
+              if (key === "fatigue") drawFatigue(ctx, payload, tx, ty, scale);
+              else drawPPEBoxes(ctx, payload, key, tx, ty, scale);
+            }
+          }
+        }
+      }
+
+      animRef.current = requestAnimationFrame(draw);
+    }
+
+    animRef.current = requestAnimationFrame(draw);
+  }
+
+  // Track video end
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    const onEnd = () => setVideoDone(true);
+    const onPlay = () => setVideoDone(false);
+    vid.addEventListener("ended", onEnd);
+    vid.addEventListener("play", onPlay);
+    return () => {
+      vid.removeEventListener("ended", onEnd);
+      vid.removeEventListener("play", onPlay);
+    };
+  }, [video]);
+
+  const pct = progress && progress.total > 0
+    ? Math.round((progress.analyzed / (progress.total / config.sample_every_n_frames)) * 100)
+    : 0;
 
   return (
     <div className="flex h-full">
@@ -189,40 +507,24 @@ function VideoAnalysis() {
             </Section>
 
             <Section title="Analysis">
-              {!streamActive ? (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
+                {!running ? (
                   <button
-                    onClick={handleAnalyzeStream}
-                    disabled={overlays.length === 0}
-                    className="w-full py-2.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-40"
+                    onClick={handleStart}
+                    className="w-full py-2.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25"
                   >
-                    Stream with Annotations
+                    Play & Analyze Live
                   </button>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-px bg-zinc-800" />
-                    <span className="text-[8px] text-zinc-600 uppercase">or</span>
-                    <div className="flex-1 h-px bg-zinc-800" />
-                  </div>
-                  <div className="space-y-2">
-                    <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
-                    <ConfigRow label="Max samples" value={config.max_samples} onChange={(v) => setConfig((c) => ({ ...c, max_samples: parseInt(v) || 1 }))} />
-                    <button
-                      onClick={handleAnalyzeJson}
-                      disabled={analyzing}
-                      className="w-full py-2 rounded-lg border border-zinc-800 text-zinc-400 text-[10px] font-semibold hover:bg-white/[0.02] disabled:opacity-40"
-                    >
-                      {analyzing ? "Analyzing..." : "Run JSON Analysis (sampled)"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={handleStopStream}
-                  className="w-full py-2.5 rounded-lg bg-red-500/15 text-red-400 text-[10px] font-semibold hover:bg-red-500/25"
-                >
-                  Stop Stream
-                </button>
-              )}
+                ) : (
+                  <button
+                    onClick={handleStop}
+                    className="w-full py-2.5 rounded-lg bg-red-500/15 text-red-400 text-[10px] font-semibold hover:bg-red-500/25"
+                  >
+                    Stop Analysis
+                  </button>
+                )}
+              </div>
             </Section>
           </>
         )}
@@ -241,34 +543,54 @@ function VideoAnalysis() {
         </Section>
       </div>
 
-      {/* Right: Preview & Results */}
+      {/* Right: Video with canvas overlay */}
       <div className="w-1/2 p-4 overflow-y-auto space-y-4">
-        <h3 className="text-xs font-semibold text-zinc-100">
-          {streamActive ? "Annotated Stream" : "Video Preview"}
-          {streamActive && <span className="ml-2 text-[9px] text-red-400 animate-pulse">LIVE</span>}
-        </h3>
-        <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden relative">
-          {streamActive && video ? (
-            <img
-              src={api.videoStreamUrl(video.id, overlays)}
-              alt="Annotated analysis"
-              className="w-full h-full object-contain"
-              onError={handleStreamEnd}
-            />
-          ) : localUrl ? (
-            <video
-              src={video ? api.videoFileUrl(video.id) : localUrl}
-              controls
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <span className="text-[10px] text-zinc-700">Select a video to preview</span>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-zinc-100">
+            {running ? "Live Analysis" : analysisData ? "Analysis Complete" : "Video Preview"}
+            {running && <span className="ml-2 text-[9px] text-red-400 animate-pulse">LIVE</span>}
+          </h3>
+          {running && progress && (
+            <span className="text-[9px] text-zinc-500 font-mono">
+              {progress.analyzed} frames analyzed{progress.total > 0 ? ` · ${Math.min(pct, 100)}%` : ""}
+            </span>
           )}
-          {streamDone && !streamActive && (
+        </div>
+
+        {/* Progress bar */}
+        {running && progress && progress.total > 0 && (
+          <div className="h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${Math.min(pct, 100)}%` }}
+            />
+          </div>
+        )}
+
+        <div className="relative bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
+          {localUrl || video ? (
+            <>
+              <video
+                ref={videoRef}
+                src={video ? api.videoFileUrl(video.id) : localUrl}
+                className="w-full h-full object-contain"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+              />
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-[10px] text-zinc-700">Select a video to preview</span>
+            </div>
+          )}
+
+          {videoDone && !running && (
             <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
-              <span className="text-[11px] text-zinc-300">Stream complete</span>
+              <span className="text-[11px] text-zinc-300">Playback complete</span>
               <button
-                onClick={handleAnalyzeStream}
+                onClick={handleRestart}
                 className="px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 text-[10px] font-semibold border border-blue-500/30 hover:bg-blue-500/30"
               >
                 Restart Analysis
@@ -277,15 +599,23 @@ function VideoAnalysis() {
           )}
         </div>
 
-        {results && (
+        {/* Playback position bar (driven by draw loop, no re-renders) */}
+        {(running || analysisData) && (
+          <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+            <div ref={playbarRef} className="h-full bg-blue-500 transition-[width] duration-150" style={{ width: 0 }} />
+          </div>
+        )}
+
+        {analysisData && (
           <>
             <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
               <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
-              <ResultRow label="Frames analyzed" value={`${results.frames_analyzed} / ${results.frames_total}`} />
-              {summarizeResults(results.results).map(({ key, count }) => (
+              <ResultRow label="Frames analyzed" value={`${analysisData.frames_analyzed} / ${analysisData.frames_total}`} />
+              <ResultRow label="Video FPS" value={analysisData.fps} />
+              {summarizeResults(analysisData.results).map(({ key, count }) => (
                 <ResultRow key={key} label={`${key} detections`} value={`${count} frames`} variant={count > 0 ? "danger" : "ok"} />
               ))}
-              {summarizeResults(results.results).length === 0 && (
+              {summarizeResults(analysisData.results).length === 0 && (
                 <ResultRow label="No detections" value="All clear" variant="ok" />
               )}
             </div>
@@ -293,7 +623,7 @@ function VideoAnalysis() {
             <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
               <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Per-Frame Results</h4>
               <div className="max-h-48 overflow-y-auto space-y-1">
-                {results.results.map((fr) => (
+                {analysisData.results.map((fr) => (
                   <div key={fr.frame} className="flex items-center gap-2 text-[9px] py-1 border-b border-zinc-800/40">
                     <span className="text-zinc-600 font-mono w-16 shrink-0">Frame {fr.frame}</span>
                     <div className="flex gap-1 flex-wrap">
@@ -320,6 +650,18 @@ function VideoAnalysis() {
       </div>
     </div>
   );
+}
+
+// Binary search: find nearest analyzed frame <= target
+function findNearest(sortedFrames, target) {
+  if (sortedFrames.length === 0) return null;
+  let lo = 0, hi = sortedFrames.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (sortedFrames[mid] <= target) lo = mid;
+    else hi = mid - 1;
+  }
+  return sortedFrames[lo] <= target ? sortedFrames[lo] : null;
 }
 
 // ============================================================

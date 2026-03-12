@@ -155,9 +155,11 @@ def video_analyze(request, video_id):
             samples += 1
         frame_idx += 1
 
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
     cap.release()
     return Response({
         'video_id': video.id,
+        'fps': round(fps, 2),
         'frames_total': frame_idx,
         'frames_analyzed': samples,
         'results': results,
