@@ -2,12 +2,16 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import CameraFeed from "../components/CameraFeed";
 import AlertCard from "../components/AlertCard";
+import Toggle from "../components/Toggle";
+
+const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
 
 export default function FeedsPage() {
   const [cameras, setCameras] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [heroId, setHeroId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
 
   function loadCameras() {
     api.listCameras().then((data) => {
@@ -40,6 +44,10 @@ export default function FeedsPage() {
     loadCameras();
   }
 
+  function toggleOverlay(key) {
+    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
   const hero = cameras.find((c) => c.id === heroId);
   const others = cameras.filter((c) => c.id !== heroId);
 
@@ -68,6 +76,19 @@ export default function FeedsPage() {
         </div>
       </div>
 
+      {/* Overlay toggle bar */}
+      {cameras.length > 0 && (
+        <div className="px-5 py-2 border-b border-zinc-800/60 flex items-center gap-4 shrink-0">
+          <span className="text-[9px] text-zinc-600 uppercase tracking-wider">Overlays</span>
+          {ALL_MODELS.map((key) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+              <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+              <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
         {/* Camera grid */}
         <div className="flex-1 p-3 overflow-auto">
@@ -93,6 +114,7 @@ export default function FeedsPage() {
                 <CameraFeed
                   camera={hero}
                   isHero
+                  overlays={overlays}
                   badges={getBadges(alerts, hero.id)}
                   onDelete={() => handleDeleteCamera(hero.id)}
                 />
@@ -101,6 +123,7 @@ export default function FeedsPage() {
                 <CameraFeed
                   key={cam.id}
                   camera={cam}
+                  overlays={overlays}
                   onClick={() => setHeroId(cam.id)}
                   badges={getBadges(alerts, cam.id)}
                   onDelete={() => handleDeleteCamera(cam.id)}
@@ -146,6 +169,23 @@ export default function FeedsPage() {
 
 function AddCameraDialog({ onClose, onSubmit }) {
   const [form, setForm] = useState({ name: "", source_url: "", location: "" });
+  const [devices, setDevices] = useState([]);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    scanDevices();
+  }, []);
+
+  async function scanDevices() {
+    setScanning(true);
+    try {
+      const data = await api.discoverDevices();
+      setDevices(data);
+    } catch {
+      setDevices([]);
+    }
+    setScanning(false);
+  }
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -153,13 +193,56 @@ function AddCameraDialog({ onClose, onSubmit }) {
     onSubmit(form);
   }
 
+  function quickAdd(device) {
+    onSubmit({ name: device.name, source_url: String(device.index), location: "Local device" });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="bg-zinc-900 border border-zinc-800 rounded-xl w-[400px] p-5 animate-slide-in"
+        className="bg-zinc-900 border border-zinc-800 rounded-xl w-[440px] p-5 animate-slide-in"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-sm font-semibold text-zinc-50 mb-4">Add Camera</h2>
+
+        {/* Discovered devices */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Detected Devices</span>
+            <button onClick={scanDevices} disabled={scanning} className="text-[9px] text-blue-400 hover:text-blue-300 disabled:opacity-40">
+              {scanning ? "Scanning..." : "Rescan"}
+            </button>
+          </div>
+          {devices.length > 0 ? (
+            <div className="space-y-1.5">
+              {devices.map((d) => (
+                <div key={d.index} className="flex items-center justify-between bg-surface-alt border border-zinc-800 rounded-lg px-3 py-2">
+                  <div>
+                    <div className="text-[10px] text-zinc-300">{d.name}</div>
+                    <div className="text-[9px] text-zinc-600">Index {d.index} &middot; {d.width}x{d.height}</div>
+                  </div>
+                  <button
+                    onClick={() => quickAdd(d)}
+                    className="text-[9px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/25 rounded px-2 py-1 hover:bg-blue-500/20"
+                  >
+                    Quick Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[10px] text-zinc-700 bg-surface-alt border border-zinc-800 rounded-lg px-3 py-3 text-center">
+              {scanning ? "Scanning for devices..." : "No local video devices found"}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex-1 h-px bg-zinc-800" />
+          <span className="text-[8px] text-zinc-600 uppercase tracking-wider">or add manually</span>
+          <div className="flex-1 h-px bg-zinc-800" />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-3">
           <FormField
             label="Camera Name"

@@ -28,7 +28,9 @@ class DjangoCameraService:
             'checked_at': datetime.now(timezone.utc).isoformat(),
         }
 
-    def stream_frames(self, source_url, camera_id=None, annotated=False):
+    def stream_frames(self, source_url, camera_id=None, annotate_fn=None):
+        """Yield JPEG-encoded frames. If annotate_fn is provided, each raw
+        numpy frame is passed through it before encoding."""
         source = _to_capture_source(source_url)
         capture = cv2.VideoCapture(source)
         try:
@@ -36,12 +38,30 @@ class DjangoCameraService:
                 ok, frame = capture.read()
                 if not ok:
                     break
+                if annotate_fn:
+                    frame = annotate_fn(frame)
                 _, jpeg = cv2.imencode('.jpg', frame)
                 if jpeg is None:
                     continue
                 yield jpeg.tobytes()
         finally:
             capture.release()
+
+    @staticmethod
+    def discover_devices(max_index=10):
+        """Probe system video device indices and return available ones."""
+        devices = []
+        for i in range(max_index):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret:
+                    h, w = frame.shape[:2]
+                    devices.append({'index': i, 'name': f'Camera {i}', 'width': w, 'height': h})
+                cap.release()
+            else:
+                cap.release()
+        return devices
 
 
 _service = DjangoCameraService()

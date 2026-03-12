@@ -1,7 +1,7 @@
 import Badge from "./Badge";
 import { api } from "../api";
 
-export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [] }) {
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [] }) {
   return (
     <div
       onClick={onClick}
@@ -9,9 +9,9 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
         isHero ? "col-span-2" : ""
       }`}
     >
-      {/* MJPEG stream */}
+      {/* MJPEG stream — overlays array controls which annotations are drawn */}
       <img
-        src={api.cameraStreamUrl(camera.id, true)}
+        src={api.cameraStreamUrl(camera.id, overlays)}
         alt={camera.name}
         className="absolute inset-0 w-full h-full object-cover"
         loading="lazy"

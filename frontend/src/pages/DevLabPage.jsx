@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
+import Toggle from "../components/Toggle";
 
 const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning", "Performance"];
+const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
 
 export default function DevLabPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -45,22 +47,31 @@ function VideoAnalysis() {
   const [file, setFile] = useState(null);
   const [localUrl, setLocalUrl] = useState(null);
   const [video, setVideo] = useState(null);
-  const [results, setResults] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [streamActive, setStreamActive] = useState(false);
+  const [results, setResults] = useState(null);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [logs, setLogs] = useState([]);
   const [config, setConfig] = useState({ sample_every_n_frames: 10, max_samples: 50 });
   const fileRef = useRef();
+  const streamRef = useRef();
 
   function addLog(level, msg) {
     const ts = new Date().toLocaleTimeString();
     setLogs((prev) => [...prev, { ts, level, msg }]);
   }
 
+  function toggleOverlay(key) {
+    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
   function handleFileSelect(e) {
     const f = e.target.files[0];
     if (!f) return;
     setFile(f);
-    // Create local blob URL for instant preview
+    setVideo(null);
+    setResults(null);
+    setStreamActive(false);
     if (localUrl) URL.revokeObjectURL(localUrl);
     setLocalUrl(URL.createObjectURL(f));
   }
@@ -77,19 +88,39 @@ function VideoAnalysis() {
     }
   }
 
-  async function handleAnalyze() {
+  function handleAnalyzeStream() {
+    if (!video || overlays.length === 0) return;
+    setStreamActive(true);
+    setResults(null);
+    addLog("info", `Streaming annotated analysis — overlays: ${overlays.join(", ")}`);
+  }
+
+  async function handleAnalyzeJson() {
     if (!video) return;
     setAnalyzing(true);
     setResults(null);
-    addLog("info", `Analysis started — ${config.max_samples} samples @ every ${config.sample_every_n_frames} frames`);
+    addLog("info", `JSON analysis — ${config.max_samples} samples @ every ${config.sample_every_n_frames} frames`);
     try {
       const r = await api.analyzeVideo(video.id, config);
       setResults(r);
-      addLog("ok", `Analysis complete — ${r.frames_analyzed}/${r.frames_total} frames analyzed`);
+      addLog("ok", `Analysis complete — ${r.frames_analyzed}/${r.frames_total} frames`);
     } catch (err) {
       addLog("err", `Analysis failed: ${err.message}`);
     }
     setAnalyzing(false);
+  }
+
+  function handleStopStream() {
+    setStreamActive(false);
+    addLog("info", "Stream stopped");
+  }
+
+  // When stream img errors (connection closed = video ended), mark done
+  function handleStreamEnd() {
+    if (streamActive) {
+      setStreamActive(false);
+      addLog("ok", "Annotated stream complete");
+    }
   }
 
   return (
@@ -114,13 +145,55 @@ function VideoAnalysis() {
         </Section>
 
         {video && (
-          <Section title="Analysis Configuration">
-            <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
-            <ConfigRow label="Max samples" value={config.max_samples} onChange={(v) => setConfig((c) => ({ ...c, max_samples: parseInt(v) || 1 }))} />
-            <button onClick={handleAnalyze} disabled={analyzing} className="mt-3 w-full py-2 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-50">
-              {analyzing ? "Analyzing..." : "Run Analysis"}
-            </button>
-          </Section>
+          <>
+            <Section title="Annotation Overlays">
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {ALL_MODELS.map((key) => (
+                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+                    <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+                  </label>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Analysis">
+              {!streamActive ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={handleAnalyzeStream}
+                    disabled={overlays.length === 0}
+                    className="w-full py-2.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-40"
+                  >
+                    Stream with Annotations
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-zinc-800" />
+                    <span className="text-[8px] text-zinc-600 uppercase">or</span>
+                    <div className="flex-1 h-px bg-zinc-800" />
+                  </div>
+                  <div className="space-y-2">
+                    <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
+                    <ConfigRow label="Max samples" value={config.max_samples} onChange={(v) => setConfig((c) => ({ ...c, max_samples: parseInt(v) || 1 }))} />
+                    <button
+                      onClick={handleAnalyzeJson}
+                      disabled={analyzing}
+                      className="w-full py-2 rounded-lg border border-zinc-800 text-zinc-400 text-[10px] font-semibold hover:bg-white/[0.02] disabled:opacity-40"
+                    >
+                      {analyzing ? "Analyzing..." : "Run JSON Analysis (sampled)"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStopStream}
+                  className="w-full py-2.5 rounded-lg bg-red-500/15 text-red-400 text-[10px] font-semibold hover:bg-red-500/25"
+                >
+                  Stop Stream
+                </button>
+              )}
+            </Section>
+          </>
         )}
 
         <Section title="Execution Log">
@@ -139,9 +212,21 @@ function VideoAnalysis() {
 
       {/* Right: Preview & Results */}
       <div className="w-1/2 p-4 overflow-y-auto space-y-4">
-        <h3 className="text-xs font-semibold text-zinc-100">Video Preview</h3>
+        <h3 className="text-xs font-semibold text-zinc-100">
+          {streamActive ? "Annotated Stream" : "Video Preview"}
+          {streamActive && <span className="ml-2 text-[9px] text-red-400 animate-pulse">ANALYZING</span>}
+        </h3>
         <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
-          {localUrl ? (
+          {streamActive && video ? (
+            /* Annotated MJPEG stream — bounding boxes drawn server-side */
+            <img
+              ref={streamRef}
+              src={api.videoStreamUrl(video.id, overlays)}
+              alt="Annotated analysis"
+              className="w-full h-full object-contain"
+              onError={handleStreamEnd}
+            />
+          ) : localUrl ? (
             <video
               src={video ? api.videoFileUrl(video.id) : localUrl}
               controls
@@ -165,7 +250,6 @@ function VideoAnalysis() {
               )}
             </div>
 
-            {/* Per-frame breakdown */}
             <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
               <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Per-Frame Results</h4>
               <div className="max-h-48 overflow-y-auto space-y-1">
@@ -201,10 +285,15 @@ function VideoAnalysis() {
 function LiveCameraTest() {
   const [cameras, setCameras] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
 
   useEffect(() => {
     api.listCameras().then((data) => setCameras(data.results || data));
   }, []);
+
+  function toggleOverlay(key) {
+    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
 
   return (
     <div className="p-5 space-y-4">
@@ -225,9 +314,19 @@ function LiveCameraTest() {
           ))}
         </div>
       </Section>
+      <Section title="Overlays">
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {ALL_MODELS.map((key) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+              <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+              <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+            </label>
+          ))}
+        </div>
+      </Section>
       {selectedId && (
         <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
-          <img src={api.cameraStreamUrl(selectedId, true)} alt="Live test" className="w-full h-full object-contain" />
+          <img src={api.cameraStreamUrl(selectedId, overlays)} alt="Live test" className="w-full h-full object-contain" />
         </div>
       )}
     </div>

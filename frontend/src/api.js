@@ -16,7 +16,20 @@ export const api = {
   updateCamera: (id, data) => request(`/cameras/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCamera: (id) => request(`/cameras/${id}/`, { method: "DELETE" }),
   cameraStatus: (id) => request(`/cameras/${id}/status/`),
-  cameraStreamUrl: (id, annotated = false) => `${BASE}/cameras/${id}/stream/${annotated ? "?annotated=1" : ""}`,
+  discoverDevices: () => request("/cameras/discover/"),
+
+  /** Build MJPEG stream URL with optional annotation overlays.
+   *  @param {number} id - camera id
+   *  @param {string[]} overlays - model keys to draw, e.g. ['helmet','fatigue'] (empty = raw) */
+  cameraStreamUrl: (id, overlays = []) => {
+    const params = new URLSearchParams();
+    if (overlays.length > 0) {
+      params.set("annotated", "1");
+      params.set("overlays", overlays.join(","));
+    }
+    const qs = params.toString();
+    return `${BASE}/cameras/${id}/stream/${qs ? "?" + qs : ""}`;
+  },
 
   // Models
   listModels: () => request("/models/"),
@@ -42,6 +55,20 @@ export const api = {
   },
   listVideos: () => request("/dev/videos/"),
   videoFileUrl: (id) => `${BASE}/dev/videos/${id}/file/`,
+
+  /** Build annotated MJPEG stream URL for a dev video.
+   *  @param {number} id - video id
+   *  @param {string[]} overlays - model keys (empty = raw stream) */
+  videoStreamUrl: (id, overlays = []) => {
+    const params = new URLSearchParams();
+    if (overlays.length > 0) {
+      params.set("annotated", "1");
+      params.set("overlays", overlays.join(","));
+    }
+    const qs = params.toString();
+    return `${BASE}/dev/videos/${id}/stream/${qs ? "?" + qs : ""}`;
+  },
+
   analyzeVideo: (id, opts) => request(`/dev/videos/${id}/analyze/`, { method: "POST", body: JSON.stringify(opts) }),
   getThresholds: () => request("/dev/thresholds/"),
   updateThresholds: (data) => request("/dev/thresholds/", { method: "PUT", body: JSON.stringify(data) }),
