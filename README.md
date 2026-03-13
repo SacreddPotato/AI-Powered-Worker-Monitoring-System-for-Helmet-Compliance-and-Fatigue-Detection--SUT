@@ -1,8 +1,8 @@
 ---
-title: AI Worker Safety Monitor
+title: SafeVision — AI Worker Safety
 emoji: 👷
-colorFrom: yellow
-colorTo: red
+colorFrom: indigo
+colorTo: purple
 sdk: docker
 app_port: 7860
 pinned: false
@@ -10,7 +10,6 @@ license: unlicense
 ---
 
 # AI-Powered Worker Monitoring System
-### Helmet Compliance & Fatigue Detection for Industrial Safety
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python)
 ![Flask](https://img.shields.io/badge/Flask-Backend-lightgrey?style=for-the-badge&logo=flask)
@@ -18,156 +17,183 @@ license: unlicense
 ![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-green?style=for-the-badge&logo=opencv)
 ![License](https://img.shields.io/badge/License-Unlicense-yellow.svg?style=for-the-badge)
 
-## 🎓 Project Abstract
+**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), with auto-download from HuggingFace
 
-This repository contains the implementation and documentation for the **Senior Capstone Project** conducted at **El Sewedy University of Technology (SUT)**. 
+**Server:** Daphne (ASGI) serving both HTTP and WebSocket on a single port
 
-The primary objective of this research is to address safety challenges in industrial environments by automating the monitoring of worker protocols. By leveraging **Computer Vision** and **Deep Learning** techniques, the proposed system provides a non-intrusive, real-time solution for:
-1.  **PPE Compliance Verification:** Ensuring adherence to safety helmet regulations.
-2.  **Operator Fatigue Analysis:** Detecting physiological signs of drowsiness to prevent accidents.
+## Features
 
-The system integrates state-of-the-art models, including **YOLOv8** for object detection and **Swin Transformers** for facial analysis, encapsulated within a **Flask** web architecture.
+- **Live Camera Feeds** — MJPEG streaming with annotated detection overlays, multi-camera grid with hero view
+- **Real-time Alerts** — WebSocket-pushed alerts with severity levels, grouping by severity/camera/model/time
+- **5 AI Models** — Helmet, fatigue, safety vest, gloves, goggles — each toggleable globally and per-camera
+- **Developer Lab** — Upload videos for frame-by-frame analysis, threshold tuning, system performance monitoring
+- **Fatigue Scoring** — Hybrid model: 60% Swin output, 30% EAR, 10% MAR with configurable thresholds
 
----
+## Requirements
 
-## 👥 Project Team
+### System
 
-**Full Stack Implementation:**
-* Shaza Alaa
-* Battol Mohamed
+- Python 3.10+
+- Node.js 18+ (for frontend build)
+- Conda (recommended, required for dlib)
 
-**Model Development & Optimization:**
-* Ahmed Baher
-* Omar Diab
-* Omar Saad
-* Haneen Ahmed
+### Python Dependencies
 
----
+```
+django>=5.0
+djangorestframework
+django-cors-headers
+channels
+daphne
+opencv-python-headless
+ultralytics
+torch
+torchvision
+numpy
+dlib
+scipy
+imutils
+werkzeug
+pillow
+huggingface-hub
+psutil
+```
 
-## 🔬 Methodology & System Modules
+### Frontend Dependencies
 
-### 1. Automated Helmet Compliance
-**Algorithm:** YOLOv8 (Custom & Pre-trained)
+Managed via `frontend/package.json` — React 18, Vite, Tailwind CSS v4, React Router.
 
-To verify Personal Protective Equipment (PPE) compliance, the system utilizes a dual-inference approach:
-* **Person Detection:** A standard `yolov8n` model identifies individuals within the frame.
-* **Helmet Detection:** A custom-trained YOLOv8 model (`best.pt`) identifies safety helmets.
-* **Correlation Logic:** The system computes the spatial intersection and proximity between detected persons and helmets. A non-compliance alert is triggered specifically when a "Person" bounding box lacks a corresponding overlapping "Helmet" bounding box in the cranial region.
+## Quick Start
 
-### 2. Fatigue Detection V1: Hybrid Approach
-**Algorithm:** Geometric Analysis (Dlib) + Visual Transformers (Swin-V2)
+### 1. Clone and set up Python environment
 
-This module implements a robust, multi-modal fusion strategy to ensure detection accuracy across varying lighting conditions and occlusions (e.g., eyewear):
-* **Geometric Stream:** Utilizes `dlib` 68-point facial landmarks to calculate:
-    * **Eye Aspect Ratio (EAR):** To quantify eye closure duration.
-    * **Mouth Aspect Ratio (MAR):** To identify yawning events.
-    * **Head Pose Estimation:** To track pitch, yaw, and roll for signs of nodding.
-* **Visual Stream:** A **Swin Transformer V2** processes the raw facial image to extract high-level fatigue features.
-* **Decision Fusion:** The final fatigue score is derived via a weighted equation:
-    $$Score = (P_{model} \times 0.6) + (S_{droop} \times 0.3) + (S_{MAR} \times 0.1)$$.
+```bash
+git clone <repo-url>
+cd AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT
 
-  
-    *Where P is probability and S is the calculated geometric score.*
+# Create conda environment (recommended for dlib)
+conda create -n fatigue_env python=3.10 -y
+conda activate fatigue_env
+conda install -c conda-forge dlib -y
 
-### 3. Fatigue Detection V2: State Classification
-**Algorithm:** Convolutional Neural Network (CNN)
+pip install -r requirements.txt
+```
 
-An alternative deep learning model designed for granular state classification. This custom CNN processes 112x112 aligned face images to categorize the subject into three distinct alertness states:
-1.  **Alert:** Subject is fully attentive.
-2.  **Non-Vigilant:** Subject exhibits early signs of drowsiness.
-3.  **Tired:** Subject exhibits active fatigue or yawning.
+### 2. Build the frontend
 
----
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
 
-## 🛠️ Technical Architecture
+### 3. Initialize the database
 
-### Repository Structure
+```bash
+cd backend
+python manage.py migrate
+cd ..
+```
 
-    .
-    ├── backend/
-    │   ├── app.py                  # Application Gateway (Flask)
-    │   ├── camera.py               # Implementation of Hybrid Fatigue Logic
-    │   ├── helmet_camera.py        # Implementation of YOLO Helmet Logic
-    │   ├── fatigue_v2_api.py       # Inference Engine for CNN Model
-    │   ├── environment.yml         # Conda Environment Specification
-    │   ├── best.pt                 # Trained Helmet Detector
-    │   ├── swin_best.pth           # Trained Swin Transformer
-    │   └── best_fatigue_model2.pth # Trained 3-Class CNN
-    ├── docs/                       # Client-Side Interface (HTML/CSS/JS)
-    │   ├── assets/                 # Static Resources
-    │   └── *.html                  # Interface Templates
-    ├── Dockerfile                  # Containerization Config
-    └── requirements.txt            # Python Dependencies
+This creates `backend/monitoring.db` (SQLite) and seeds the 5 AI model settings.
 
-### Frameworks & Libraries
-* **Core Runtime:** Python 3.10
-* **Web Architecture:** Flask
-* **Computer Vision:** OpenCV, Dlib, Pillow
-* **Machine Learning:** PyTorch, Ultralytics YOLO
-* **Deployment:** Docker, Git LFS
+### 4. Run the server
 
----
+```bash
+cd backend
+daphne -b 0.0.0.0 -p 7860 sentinel.asgi:application
+```
 
-## 💻 Setup & Installation
+Open **http://localhost:7860** in your browser.
 
-### Prerequisites
-* **Git** (Git LFS required for large model files).
-* **Docker Engine** (Recommended) OR **Python 3.10** with Conda.
+### Development Mode (hot reload)
 
-### Option A: Docker Deployment (Recommended)
-Docker is recommended to automate the compilation of `dlib` dependencies.
+The easiest way to develop is with the included run script, which launches both servers in one terminal:
 
-1.  **Clone Repository:**
-    ```bash
-    git clone [https://github.com/SacreddPotato/worker-monitoring-system.git](https://github.com/SacreddPotato/worker-monitoring-system.git)
-    cd worker-monitoring-system
-    ```
+```bash
+python run.py
+```
 
-2.  **Build Image:**
-    ```bash
-    docker build -t worker-monitor .
-    ```
+This starts Daphne (backend, port 7860) and Vite (frontend, port 5173) together. Open **http://localhost:5173** for hot-reload development. Press Ctrl+C to stop both.
 
-3.  **Launch Container:**
-    ```bash
-    docker run -p 7860:7860 worker-monitor
-    ```
-    The interface will be accessible at `http://localhost:7860`.
+You can also run them individually:
 
-### Option B: Local Environment (Conda)
-If running locally, Conda is advised for managing binary dependencies.
+```bash
+python run.py --backend   # backend only
+python run.py --frontend  # frontend only
+```
 
-1.  **Initialize Environment:**
-    ```bash
-    conda env create -f backend/environment.yml
-    conda activate fatigue_env
-    ```
+Or manually in separate terminals:
 
-2.  **Model Acquisition:**
-    Ensure Git LFS has pulled the actual `.pt` and `.pth` files in `backend/` (not pointer files).
+```bash
+# Terminal 1
+cd backend && daphne -b 0.0.0.0 -p 7860 sentinel.asgi:application
 
-3.  **Execution:**
-    ```bash
-    python backend/app.py
-    ```
+# Terminal 2
+cd frontend && npm run dev
+```
 
----
+## Docker
 
-## 📊 Data Sources
+```bash
+docker build -t worker-monitor .
+docker run -p 7860:7860 worker-monitor
+```
 
-The models utilized in this study were trained and validated using the following open-access datasets:
+The Dockerfile uses Miniconda, installs dlib via conda, builds the frontend, and runs Daphne on port 7860.
 
-* **Helmet Detection:** [Kaggle Hard Hat Detection Dataset](https://www.kaggle.com/datasets/andrewmvd/hard-hat-detection).
-* **Fatigue Analysis:** [UTA-RLDD Fatigue Detection Dataset](https://www.kaggle.com/datasets/minhngt02/uta-rldd) (Binary & Multi-class variations).
+## API Reference
 
----
+All endpoints are prefixed with `/api/v1/`.
 
-## 🔒 Ethical Considerations
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health/` | Health check |
+| GET/POST | `/cameras/` | List or create cameras |
+| GET/PUT/DELETE | `/cameras/{id}/` | Camera CRUD |
+| GET | `/cameras/{id}/status/` | Camera connection status |
+| GET | `/cameras/{id}/stream/` | MJPEG stream (`?annotated=1` for overlays) |
+| GET | `/models/` | List all model settings |
+| PUT | `/models/{key}/` | Toggle model on/off |
+| GET | `/cameras/{id}/models/` | Per-camera model overrides |
+| PUT | `/cameras/{id}/models/{key}/` | Set per-camera model override |
+| GET | `/alerts/` | List alerts (`?status=open&severity=high`) |
+| PATCH | `/alerts/{id}/acknowledge/` | Acknowledge an alert |
+| POST | `/detections/analyze/` | Trigger analysis for a camera |
+| POST | `/dev/videos/` | Upload video (multipart, field: `video`) |
+| GET | `/dev/videos/{id}/file/` | Download uploaded video |
+| POST | `/dev/videos/{id}/analyze/` | Analyze video frames |
+| GET/PUT | `/dev/thresholds/` | Get/set detection thresholds |
+| GET | `/dev/performance/` | System performance metrics |
 
-* **Privacy by Design:** The system architecture processes video streams in volatile memory (RAM). No video data is persisted to disk or external databases during standard operation, ensuring the privacy of monitored individuals.
-* **Data Retention:** The "Upload" feature for testing purposes stores files temporarily in `backend/uploads`, which are subject to ephemeral storage policies.
+**WebSocket:** `ws://localhost:7860/ws/alerts/` — real-time alert push (JSON messages)
 
----
+## ML Model Weights
+
+Model weights are **not** checked into the repository. They are stored in `backend/ml_models/` and downloaded automatically from HuggingFace on first use. You can override download URLs with environment variables:
+
+- `HELMET_MODEL_URL`
+- `PPE_MULTI_MODEL_URL`
+- `PERSON_MODEL_URL`
+- `SHAPE_PREDICTOR_URL`
+
+## Project Structure
+
+```
+backend/
+├── sentinel/           # Django project (settings, urls, asgi)
+├── cameras/            # Camera CRUD + MJPEG streaming
+├── detection/          # Model settings, per-camera overrides, detection records
+├── alerts/             # Alert model + WebSocket consumer
+├── devlab/             # Video upload, analysis, threshold tuning
+├── camera_service.py   # OpenCV camera capture service
+├── inference_service.py# ML inference orchestrator
+├── fatigue_engine.py   # Swin + dlib fatigue scoring
+├── model_service.py    # Model loading + HuggingFace download
+├── alerts_service.py   # Alert creation logic
+├── config.py           # Runtime configuration
+└── ml_models/          # Model weights (gitignored)
 
 ## 📄 License
 This project is released under the **Unlicense License**.
