@@ -26,7 +26,7 @@ const icons = {
 };
 
 const navItems = [
-  { to: "/", icon: "feeds", label: "Feeds" },
+  { to: "/feeds", icon: "feeds", label: "Feeds" },
   { to: "/alerts", icon: "alerts", label: "Alerts" },
   { to: "/models", icon: "models", label: "Models" },
   { to: "/devlab", icon: "devlab", label: "Dev Lab" },
@@ -42,7 +42,6 @@ export default function IconRail({ alertCount = 0 }) {
         <NavLink
           key={to}
           to={to}
-          end={to === "/"}
           className={({ isActive }) =>
             `w-9 h-9 rounded-lg flex items-center justify-center relative transition-colors ${
               isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]"
