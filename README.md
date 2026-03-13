@@ -5,51 +5,17 @@ colorFrom: indigo
 colorTo: purple
 sdk: docker
 app_port: 7860
+pinned: false
+license: unlicense
 ---
 
 # AI-Powered Worker Monitoring System
 
-![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white)
-![Django](https://img.shields.io/badge/Django-5.0-092E20?style=flat-square&logo=django&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
-![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
-![YOLOv8](https://img.shields.io/badge/YOLOv8-00FFFF?style=flat-square&logo=yolo&logoColor=black)
-![Deep Learning](https://img.shields.io/badge/Deep_Learning-FF6F00?style=flat-square)
-![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?style=flat-square&logo=opencv&logoColor=white)
-![Computer Vision](https://img.shields.io/badge/Computer_Vision-4CAF50?style=flat-square)
-![WebSocket](https://img.shields.io/badge/WebSocket-010101?style=flat-square&logo=socketdotio&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![License](https://img.shields.io/badge/License-Unlicense-blue?style=flat-square)
-
-Real-time worker safety monitoring dashboard with helmet compliance detection, fatigue analysis, and PPE verification. Built with Django + React.
-
-## Architecture
-
-```
-┌────────────────────────────────────────────────────────┐
-│  React SPA (Vite + Tailwind CSS v4)                    │
-│  ┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐           │
-│  │Feeds │ │ Alerts │ │ Models │ │ Dev Lab │           │
-│  └──┬───┘ └───┬────┘ └───┬────┘ └────┬────┘           │
-│     │    REST  │  WebSocket│     REST  │               │
-└─────┼──────────┼──────────┼───────────┼────────────────┘
-      │          │          │           │
-┌─────┼──────────┼──────────┼───────────┼────────────────┐
-│  Django (DRF + Channels via Daphne ASGI)               │
-│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────┐         │
-│  │ cameras │ │ alerts │ │detection │ │devlab│         │
-│  └────┬────┘ └───┬────┘ └─────┬────┘ └──┬───┘         │
-│       │          │            │          │             │
-│  ┌────┴──────────┴────────────┴──────────┴───────────┐ │
-│  │  ML Services (camera, inference, fatigue engine)  │ │
-│  │  YOLOv8 · Swin Transformer · dlib landmarks       │ │
-│  └───────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────┘
-```
-
-**Backend:** Django 5 + Django REST Framework + Django Channels (WebSocket for real-time alerts)
-
-**Frontend:** React 18 + Vite + Tailwind CSS v4 — "Tactical HUD" dark theme with DM Sans / JetBrains Mono typography
+![Python](https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python)
+![Flask](https://img.shields.io/badge/Flask-Backend-lightgrey?style=for-the-badge&logo=flask)
+![PyTorch](https://img.shields.io/badge/PyTorch-Deep%20Learning-orange?style=for-the-badge&logo=pytorch)
+![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-green?style=for-the-badge&logo=opencv)
+![License](https://img.shields.io/badge/License-Unlicense-yellow.svg?style=for-the-badge)
 
 **ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), with auto-download from HuggingFace
 
@@ -229,17 +195,5 @@ backend/
 ├── config.py           # Runtime configuration
 └── ml_models/          # Model weights (gitignored)
 
-frontend/
-├── src/
-│   ├── pages/          # FeedsPage, AlertsPage, ModelsPage, DevLabPage
-│   ├── components/     # CameraFeed, AlertCard, Badge, Toggle, Toast, IconRail
-│   ├── api.js          # REST client
-│   ├── ws.js           # WebSocket client with auto-reconnect
-│   └── App.jsx         # Shell with routing + WebSocket connection
-├── vite.config.js
-└── tailwind.config.js
-```
-
-## License
-
-See [LICENSE](LICENSE).
+## 📄 License
+This project is released under the **Unlicense License**.
