@@ -1,3 +1,12 @@
+---
+title: SafeVision — AI Worker Safety
+emoji: 👷
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+---
+
 # AI-Powered Worker Monitoring System
 
 ![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white)
