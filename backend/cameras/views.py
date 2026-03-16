@@ -34,7 +34,7 @@ def _make_annotator(camera_id, overlays_csv):
 
     cached = {}
     counter = [0]
-    INFERENCE_INTERVAL = 3
+    INFERENCE_INTERVAL = 5
 
     def annotate(frame):
         # While models are still loading, return raw frame
