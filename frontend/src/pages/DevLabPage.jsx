@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
+import useCameraStream from "../hooks/useCameraStream";
 
 const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
 const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
@@ -713,9 +714,22 @@ function LiveCameraTest() {
           ))}
         </div>
       </Section>
-      {selectedId && (
-        <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
-          <img src={api.cameraStreamUrl(selectedId, overlays)} alt="Live test" className="w-full h-full object-contain" />
+      {selectedId && <LiveCameraPreview cameraId={selectedId} overlays={overlays} />}
+    </div>
+  );
+}
+
+function LiveCameraPreview({ cameraId, overlays }) {
+  const { src, status } = useCameraStream(cameraId, overlays);
+  return (
+    <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden relative">
+      {src ? (
+        <img src={src} alt="Live test" className="w-full h-full object-contain" />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[10px] text-zinc-600">
+            {status === "connecting" ? "Connecting..." : "No signal"}
+          </span>
         </div>
       )}
     </div>
