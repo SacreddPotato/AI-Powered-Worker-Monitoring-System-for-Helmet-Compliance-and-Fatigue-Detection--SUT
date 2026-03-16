@@ -26,6 +26,9 @@ export default function DevLabPage() {
           <h1 className="text-base font-semibold text-zinc-50">Developer Lab</h1>
           <span className="text-xs text-zinc-600">Testing & debugging</span>
         </div>
+        <span className="text-[9px] font-mono text-zinc-700 select-all" title={`Built ${__BUILD_TIME__}`}>
+          {__COMMIT_HASH__}
+        </span>
       </div>
 
       <div className="flex border-b border-zinc-800/60 px-5 shrink-0">
