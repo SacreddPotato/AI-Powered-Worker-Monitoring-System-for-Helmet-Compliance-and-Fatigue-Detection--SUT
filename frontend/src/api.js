@@ -13,7 +13,9 @@ async function request(path, options = {}) {
     ...options,
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json();
+  if (res.status === 204 || res.headers.get("content-length") === "0") return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export const api = {
@@ -24,6 +26,16 @@ export const api = {
   deleteCamera: (id) => request(`/cameras/${id}/`, { method: "DELETE" }),
   cameraStatus: (id) => request(`/cameras/${id}/status/`),
   discoverDevices: () => request("/cameras/discover/"),
+  probeSource: async (source_url) => {
+    const res = await fetch(`${BASE}/cameras/probe/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_url }),
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 
   cameraStreamUrl: (id, overlays = []) => {
     const params = new URLSearchParams();

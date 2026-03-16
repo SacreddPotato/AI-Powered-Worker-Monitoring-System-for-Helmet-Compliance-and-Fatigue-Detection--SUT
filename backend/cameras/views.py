@@ -60,6 +60,20 @@ class CameraViewSet(viewsets.ModelViewSet):
     queryset = Camera.objects.all()
     serializer_class = CameraSerializer
 
+    @action(detail=False, methods=['post'])
+    def probe(self, request):
+        """Test a source URL and return a single JPEG preview frame.
+        Body: {"source_url": "rtsp://... or 0"}
+        Returns JPEG image if successful, 422 if unreachable."""
+        from django.http import HttpResponse
+        source_url = request.data.get('source_url', '')
+        if not source_url:
+            return Response({'error': 'source_url required'}, status=400)
+        svc = get_camera_service()
+        for frame_bytes in svc.stream_frames(source_url):
+            return HttpResponse(frame_bytes, content_type='image/jpeg')
+        return Response({'error': 'Could not read frame from source'}, status=422)
+
     @action(detail=False, methods=['get'])
     def discover(self, request):
         """Enumerate system video capture devices (webcams etc.)."""
@@ -73,6 +87,16 @@ class CameraViewSet(viewsets.ModelViewSet):
         svc = get_camera_service()
         result = svc.check_camera_status(camera.source_url)
         return Response(result)
+
+    @action(detail=True, methods=['get'])
+    def snapshot(self, request, pk=None):
+        """Return a single JPEG frame — useful for testing camera connectivity."""
+        from django.http import HttpResponse
+        camera = self.get_object()
+        svc = get_camera_service()
+        for frame_bytes in svc.stream_frames(camera.source_url, camera.id):
+            return HttpResponse(frame_bytes, content_type='image/jpeg')
+        return HttpResponse(status=502)
 
     @action(detail=True, methods=['get'])
     def stream(self, request, pk=None):
@@ -90,7 +114,11 @@ class CameraViewSet(viewsets.ModelViewSet):
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-        return StreamingHttpResponse(
+        response = StreamingHttpResponse(
             generate(),
             content_type='multipart/x-mixed-replace; boundary=frame'
         )
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['X-Accel-Buffering'] = 'no'
+        response['Connection'] = 'keep-alive'
+        return response

@@ -1,7 +1,12 @@
+import { useState } from "react";
 import Badge from "./Badge";
 import { api } from "../api";
 
 export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [] }) {
+  const [error, setError] = useState(false);
+
+  const streamUrl = api.cameraStreamUrl(camera.id, overlays);
+
   return (
     <div
       onClick={onClick}
@@ -9,20 +14,36 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
         isHero ? "col-span-2" : ""
       }`}
     >
-      {/* MJPEG stream — overlays array controls which annotations are drawn */}
-      <img
-        src={api.cameraStreamUrl(camera.id, overlays)}
-        alt={camera.name}
-        className="absolute inset-0 w-full h-full object-cover"
-        loading="lazy"
-      />
+      {/* MJPEG stream — no lazy loading; must connect immediately */}
+      {!error ? (
+        <img
+          src={streamUrl}
+          alt={camera.name}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setError(true)}
+        />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950">
+          <svg viewBox="0 0 24 24" className="w-8 h-8 text-zinc-700 mb-2" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+            <line x1="4" y1="4" x2="20" y2="20" />
+          </svg>
+          <span className="text-[10px] text-zinc-600">No signal</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); setError(false); }}
+            className="mt-2 text-[9px] text-blue-400 hover:text-blue-300"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 pointer-events-none" />
 
       {/* Scan line on hero */}
       {isHero && (
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent animate-scan" />
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent animate-scan pointer-events-none" />
       )}
 
       {/* Top bar */}
@@ -39,8 +60,10 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
             </button>
           )}
           <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse-dot" />
-            <span className="text-[8px] text-red-500 font-semibold">LIVE</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${error ? "bg-zinc-600" : "bg-red-500 animate-pulse-dot"}`} />
+            <span className={`text-[8px] font-semibold ${error ? "text-zinc-600" : "text-red-500"}`}>
+              {error ? "OFFLINE" : "LIVE"}
+            </span>
           </div>
         </div>
       </div>
@@ -51,7 +74,7 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
           {badges.map((b, i) => (
             <Badge key={i} variant={b.variant}>{b.label}</Badge>
           ))}
-          {badges.length === 0 && <Badge variant="success">All clear</Badge>}
+          {badges.length === 0 && !error && <Badge variant="success">All clear</Badge>}
         </div>
       </div>
     </div>

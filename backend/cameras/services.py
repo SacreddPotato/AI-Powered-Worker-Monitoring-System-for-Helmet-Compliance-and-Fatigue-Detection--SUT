@@ -27,18 +27,26 @@ def _to_capture_source(source_url: str):
 
 
 def _open_capture(source):
-    """Try each backend in order and return the first that works."""
+    """Try each backend in order and return the first that works.
+    Catches C++ exceptions from OpenCV that would otherwise crash the process."""
     backends = _BACKENDS if isinstance(source, int) else [cv2.CAP_ANY]
     for backend in backends:
-        cap = cv2.VideoCapture(source, backend)
-        if cap.isOpened():
+        try:
+            cap = cv2.VideoCapture(source, backend)
+            if not cap.isOpened():
+                cap.release()
+                continue
+            # Network streams can be slow to deliver the first frame
+            if isinstance(source, str) and not source.isdigit():
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
             ok, _ = cap.read()
             if ok:
                 logger.info("Camera %s opened with backend %s", source, backend)
                 return cap
             cap.release()
-        else:
-            cap.release()
+        except Exception:
+            logger.exception("OpenCV error opening %s with backend %s", source, backend)
     return None
 
 
