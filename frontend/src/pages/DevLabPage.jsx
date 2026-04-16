@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
+<<<<<<< HEAD
+import useCameraStream from "../hooks/useCameraStream";
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
 
 const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
 const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
@@ -26,6 +30,12 @@ export default function DevLabPage() {
           <h1 className="text-base font-semibold text-zinc-50">Developer Lab</h1>
           <span className="text-xs text-zinc-600">Testing & debugging</span>
         </div>
+<<<<<<< HEAD
+        <span className="text-[9px] font-mono text-zinc-700 select-all" title={`Built ${__BUILD_TIME__}`}>
+          {__COMMIT_HASH__}
+        </span>
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
       </div>
 
       <div className="flex border-b border-zinc-800/60 px-5 shrink-0">
@@ -710,9 +720,28 @@ function LiveCameraTest() {
           ))}
         </div>
       </Section>
+<<<<<<< HEAD
+      {selectedId && <LiveCameraPreview cameraId={selectedId} overlays={overlays} />}
+    </div>
+  );
+}
+
+function LiveCameraPreview({ cameraId, overlays }) {
+  const { src, status } = useCameraStream(cameraId, overlays);
+  return (
+    <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden relative">
+      {src ? (
+        <img src={src} alt="Live test" className="w-full h-full object-contain" />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[10px] text-zinc-600">
+            {status === "connecting" ? "Connecting..." : "No signal"}
+          </span>
+=======
       {selectedId && (
         <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
           <img src={api.cameraStreamUrl(selectedId, overlays)} alt="Live test" className="w-full h-full object-contain" />
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
         </div>
       )}
     </div>

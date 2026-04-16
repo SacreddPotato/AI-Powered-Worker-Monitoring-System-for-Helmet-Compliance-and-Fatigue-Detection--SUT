@@ -5,6 +5,10 @@ from .models import ModelSetting, CameraModel, Detection
 from .serializers import ModelSettingSerializer, CameraModelSerializer, DetectionSerializer
 from .services import get_inference_service, get_model_definitions
 from cameras.models import Camera
+<<<<<<< HEAD
+from alerts.services import create_alert_from_inference
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
 
 class ModelSettingViewSet(viewsets.ModelViewSet):
     queryset = ModelSetting.objects.all()
@@ -35,6 +39,23 @@ def camera_models_view(request, camera_id, model_key=None):
         override.save()
     return Response(CameraModelSerializer(override).data)
 
+<<<<<<< HEAD
+
+@api_view(['GET'])
+def camera_models_overrides_view(request):
+    overrides = CameraModel.objects.select_related('camera', 'model_setting').all()
+    grouped = {}
+    for ov in overrides:
+        cam_id = ov.camera_id
+        grouped.setdefault(cam_id, []).append({
+            'id': ov.id,
+            'model_key': ov.model_setting.key,
+            'is_enabled': ov.is_enabled,
+        })
+    return Response(grouped)
+
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
 @api_view(['POST'])
 def analyze_frame(request):
     camera_id = request.data.get('camera_id')
@@ -61,6 +82,10 @@ def analyze_frame(request):
             status=result.get('status', 'ok'),
             detected=result.get('detected', False),
         )
+<<<<<<< HEAD
+        create_alert_from_inference(camera=camera, model_key=key, result=result, detection=det)
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
         results.append(DetectionSerializer(det).data)
 
     return Response(results)

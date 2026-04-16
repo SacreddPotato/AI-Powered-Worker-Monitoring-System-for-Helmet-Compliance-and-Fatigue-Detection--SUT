@@ -38,6 +38,16 @@ htmlcov/
 
 # Runtime state
 backend/monitoring.db
+<<<<<<< HEAD
+backend/monitoring.db-shm
+backend/monitoring.db-wal
+backend/monitoring.db-journal
+monitoring.db
+monitoring.db-shm
+monitoring.db-wal
+monitoring.db-journal
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
 
 # Frontend tooling
 frontend/node_modules/
@@ -53,3 +63,9 @@ backend/ml_models/*.dat
 
 # Brainstorming artifacts
 .superpowers/
+<<<<<<< HEAD
+
+# Model stats
+.modelStats/
+=======
+>>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
