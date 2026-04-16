@@ -21,6 +21,10 @@ class ModelSettingSerializer(serializers.ModelSerializer):
         return defn.get('description', '')
 
     def get_health(self, obj):
+        request = self.context.get('request')
+        include_health = bool(request and request.query_params.get('include_health') in {'1', 'true', 'True'})
+        if not include_health:
+            return None
         from .services import get_inference_service
         svc = get_inference_service()
         return svc.get_model_health(obj.key)

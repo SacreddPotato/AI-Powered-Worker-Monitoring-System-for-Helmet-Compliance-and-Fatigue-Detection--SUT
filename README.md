@@ -91,6 +91,7 @@ werkzeug
 pillow
 huggingface-hub
 psutil
+openpyxl
 ```
 
 ### Frontend Dependencies

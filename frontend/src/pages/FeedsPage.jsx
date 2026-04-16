@@ -12,6 +12,7 @@ export default function FeedsPage() {
   const [heroId, setHeroId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
+  const [deletingIds, setDeletingIds] = useState([]);
 
   function loadCameras() {
     api.listCameras().then((data) => {
@@ -33,15 +34,38 @@ export default function FeedsPage() {
   }, []);
 
   async function handleAddCamera(form) {
+    // Duplicate check — reject if source_url already exists
+    const existing = cameras.find((c) => c.source_url === form.source_url);
+    if (existing) {
+      alert(`Camera "${existing.name}" already uses source ${form.source_url}`);
+      return;
+    }
     await api.createCamera(form);
     setShowAdd(false);
     loadCameras();
   }
 
   async function handleDeleteCamera(id) {
-    await api.deleteCamera(id);
-    if (heroId === id) setHeroId(null);
-    loadCameras();
+    if (deletingIds.includes(id)) return;
+
+    const previousCameras = cameras;
+    const remainingCameras = cameras.filter((c) => c.id !== id);
+    setDeletingIds((prev) => [...prev, id]);
+    setCameras(remainingCameras);
+    if (heroId === id) {
+      setHeroId(remainingCameras.length > 0 ? remainingCameras[0].id : null);
+    }
+
+    try {
+      await api.deleteCamera(id);
+      loadCameras();
+    } catch {
+      setCameras(previousCameras);
+      if (heroId === id) setHeroId(id);
+      alert("Failed to remove camera. Please try again.");
+    } finally {
+      setDeletingIds((prev) => prev.filter((x) => x !== id));
+    }
   }
 
   function toggleOverlay(key) {
@@ -116,6 +140,7 @@ export default function FeedsPage() {
                   isHero
                   overlays={overlays}
                   badges={getBadges(alerts, hero.id)}
+                  isDeleting={deletingIds.includes(hero.id)}
                   onDelete={() => handleDeleteCamera(hero.id)}
                 />
               )}
@@ -126,6 +151,7 @@ export default function FeedsPage() {
                   overlays={overlays}
                   onClick={() => setHeroId(cam.id)}
                   badges={getBadges(alerts, cam.id)}
+                  isDeleting={deletingIds.includes(cam.id)}
                   onDelete={() => handleDeleteCamera(cam.id)}
                 />
               ))}
@@ -171,10 +197,16 @@ function AddCameraDialog({ onClose, onSubmit }) {
   const [form, setForm] = useState({ name: "", source_url: "", location: "" });
   const [devices, setDevices] = useState([]);
   const [scanning, setScanning] = useState(false);
+  const [preview, setPreview] = useState(null);       // object URL for preview image
+  const [probing, setProbing] = useState(false);
+  const [probeError, setProbeError] = useState("");
 
   useEffect(() => {
     scanDevices();
   }, []);
+
+  // Clean up preview blob URL
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   async function scanDevices() {
     setScanning(true);
@@ -187,9 +219,42 @@ function AddCameraDialog({ onClose, onSubmit }) {
     setScanning(false);
   }
 
+  async function probeSource() {
+    if (!form.source_url) return;
+    setProbing(true);
+    setProbeError("");
+    if (preview) {
+      URL.revokeObjectURL(preview);
+    }
+    setPreview(null);
+
+    try {
+      const result = await api.probeSource(form.source_url);
+      if (result?.ok && result.url) {
+        setPreview(result.url);
+        return true;
+      }
+      setProbeError(result?.error || "Could not connect to this source");
+      return false;
+    } catch {
+      setProbeError("Could not connect to this source");
+      return false;
+    } finally {
+      setProbing(false);
+    }
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     if (!form.name || !form.source_url) return;
+    // For manual entries (non-device-index), require successful probe
+    const isDeviceIndex = /^\d+$/.test(form.source_url);
+    if (!isDeviceIndex && !preview) {
+      probeSource().then((ok) => {
+        if (ok) onSubmit(form);
+      });
+      return;
+    }
     onSubmit(form);
   }
 
@@ -251,13 +316,48 @@ function AddCameraDialog({ onClose, onSubmit }) {
             onChange={(v) => setForm((f) => ({ ...f, name: v }))}
             required
           />
-          <FormField
-            label="Source URL"
-            placeholder="rtsp://192.168.1.100:554/stream or 0 for webcam"
-            value={form.source_url}
-            onChange={(v) => setForm((f) => ({ ...f, source_url: v }))}
-            required
-          />
+          <div>
+            <label className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-1">Source URL</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="rtsp://192.168.1.100:554/stream or 0 for webcam"
+                value={form.source_url}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, source_url: v.target.value }));
+                  if (preview) {
+                    URL.revokeObjectURL(preview);
+                  }
+                  setPreview(null);
+                  setProbeError("");
+                }}
+                required
+                className="flex-1 bg-surface-alt border border-zinc-800 rounded-lg px-3 py-2 text-[11px] text-zinc-300 placeholder-zinc-700 focus:border-blue-500/40 focus:outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={probeSource}
+                disabled={probing || !form.source_url}
+                className="text-[9px] font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/25 rounded-lg px-3 hover:bg-blue-500/20 disabled:opacity-40 transition-colors whitespace-nowrap"
+              >
+                {probing ? "Testing..." : "Test"}
+              </button>
+            </div>
+          </div>
+
+          {/* Preview / probe result */}
+          {(preview || probeError) && (
+            <div className={`rounded-lg overflow-hidden border ${probeError ? "border-red-500/30" : "border-green-500/30"}`}>
+              {preview ? (
+                <img src={preview} alt="Camera preview" className="w-full h-32 object-cover" />
+              ) : (
+                <div className="flex items-center justify-center h-20 bg-red-500/5">
+                  <span className="text-[10px] text-red-400">{probeError}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <FormField
             label="Location"
             placeholder="e.g. Building B, Floor 2 (optional)"
@@ -268,8 +368,12 @@ function AddCameraDialog({ onClose, onSubmit }) {
             <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-zinc-800 text-zinc-500 text-[10px] font-semibold hover:bg-white/[0.02] transition-colors">
               Cancel
             </button>
-            <button type="submit" className="flex-1 py-2 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/25 text-[10px] font-semibold hover:bg-blue-500/25 transition-colors">
-              Add Camera
+            <button
+              type="submit"
+              disabled={probing}
+              className="flex-1 py-2 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/25 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-40 transition-colors"
+            >
+              {!/^\d+$/.test(form.source_url) && !preview ? "Test & Add" : "Add Camera"}
             </button>
           </div>
         </form>
