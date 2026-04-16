@@ -15,4 +15,3 @@ werkzeug
 pillow
 huggingface-hub
 psutil
-openpyxl

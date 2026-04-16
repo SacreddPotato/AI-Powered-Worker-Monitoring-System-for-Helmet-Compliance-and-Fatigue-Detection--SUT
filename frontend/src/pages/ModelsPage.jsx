@@ -6,35 +6,6 @@ export default function ModelsPage() {
   const [models, setModels] = useState([]);
   const [cameras, setCameras] = useState([]);
   const [overrides, setOverrides] = useState({});
-<<<<<<< HEAD
-  const [loading, setLoading] = useState(true);
-  const [loadMs, setLoadMs] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoading(true);
-      const startedAt = performance.now();
-      try {
-        const [modelsData, camerasData, overridesData] = await Promise.all([
-          api.listModels(),
-          api.listCameras(),
-          api.listCameraModelsBulk(),
-        ]);
-        if (!active) return;
-        setModels(modelsData.results || modelsData);
-        setCameras(camerasData.results || camerasData);
-        setOverrides(overridesData || {});
-        setLoadMs(Math.round(performance.now() - startedAt));
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-=======
 
   useEffect(() => {
     api.listModels().then((data) => setModels(data.results || data));
@@ -47,7 +18,6 @@ export default function ModelsPage() {
         });
       });
     });
->>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
   }, []);
 
   async function toggleGlobal(key, current) {
@@ -74,13 +44,7 @@ export default function ModelsPage() {
         <div className="flex items-baseline gap-2">
           <h1 className="text-base font-semibold text-zinc-50">Model Management</h1>
           <span className="text-xs text-zinc-600">
-<<<<<<< HEAD
-            {loading
-              ? "Loading..."
-              : `${models.length} models · ${models.filter((m) => m.is_enabled).length} active${loadMs != null ? ` · ${loadMs} ms` : ""}`}
-=======
             {models.length} models &middot; {models.filter((m) => m.is_enabled).length} active
->>>>>>> 8115fdcf9d162b5e5dee45a08428c0476c2fa649
           </span>
         </div>
       </div>
