@@ -89,6 +89,11 @@ class CameraStreamConsumer(WebsocketConsumer):
             consecutive_failures = 0
             try:
                 while self._running:
+                    if not Camera.objects.filter(pk=self.camera_id, is_active=True).exists():
+                        logger.info("Camera %s: stream stopped because camera was removed or deactivated", self.camera_id)
+                        self._running = False
+                        return
+
                     ok, frame = capture.read()
                     if not ok:
                         consecutive_failures += 1
@@ -142,7 +147,9 @@ class CameraStreamConsumer(WebsocketConsumer):
         but driven by self._overlays which can change at runtime)."""
         from detection.services import get_inference_service
         from detection.models import ModelSetting, CameraModel
+        from alerts.services import create_alert_from_inference
         from annotation import draw_annotations
+        from .models import Camera
 
         # Resolve enabled models for this camera
         enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
@@ -153,6 +160,7 @@ class CameraStreamConsumer(WebsocketConsumer):
                 enabled.discard(ov.model_setting_id)
 
         svc = get_inference_service()
+        camera = Camera.objects.filter(pk=self.camera_id).first()
         if not svc.ready:
             threading.Thread(target=svc.preload, daemon=True).start()
 
@@ -169,6 +177,9 @@ class CameraStreamConsumer(WebsocketConsumer):
                     new = {}
                     for key in enabled:
                         new[key] = svc.run_inference_on_frame(key, frame, camera_id=self.camera_id)
+                    if camera is not None:
+                        for key, result in new.items():
+                            create_alert_from_inference(camera=camera, model_key=key, result=result)
                     cached.clear()
                     cached.update(new)
                 return draw_annotations(frame, cached, enabled_overlays=self._overlays)

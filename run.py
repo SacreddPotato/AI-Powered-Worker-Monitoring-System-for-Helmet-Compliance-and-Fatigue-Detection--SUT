@@ -10,7 +10,6 @@ import sys
 import subprocess
 import argparse
 import threading
-import time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT, "backend")
@@ -50,6 +49,19 @@ def _kill(proc, name):
         pass
 
 
+def _ensure_backend_database() -> bool:
+    """Ensure SQLite file/schema exists by running Django migrations."""
+    print("[run] Ensuring local database is ready (migrations)...")
+    result = subprocess.run(
+        [sys.executable, "manage.py", "migrate", "--noinput"],
+        cwd=BACKEND_DIR,
+    )
+    if result.returncode != 0:
+        print(f"[run] Database setup failed (exit code {result.returncode})")
+        return False
+    return True
+
+
 def run():
     parser = argparse.ArgumentParser(description="Run the monitoring dashboard")
     parser.add_argument("--backend", action="store_true", help="Backend only")
@@ -64,6 +76,8 @@ def run():
         shutdown.set()
 
     if both or args.backend:
+        if not _ensure_backend_database():
+            return
         print("[run] Starting backend — Daphne on :7860")
         procs["Backend"] = subprocess.Popen(
             [sys.executable, "-m", "daphne", "-b", "0.0.0.0", "-p", "7860",

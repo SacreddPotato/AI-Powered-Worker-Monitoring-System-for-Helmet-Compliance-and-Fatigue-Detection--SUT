@@ -1,7 +1,10 @@
 """Wraps existing camera_service.py for Django views."""
 import logging
+import re
+import socket
 import sys
 import time
+from urllib.parse import urlparse
 
 import cv2
 import numpy as np
@@ -21,14 +24,73 @@ _BACKENDS = (
 _MAX_RETRIES = 3
 _RETRY_DELAY = 0.5  # seconds
 
+_HOST_PORT_RE = re.compile(r"^[A-Za-z0-9._-]+(?::\d+)?(?:/.*)?$")
+
 
 def _to_capture_source(source_url: str):
     return int(source_url) if str(source_url).isdigit() else source_url
 
 
+def _normalize_source_url(source_url):
+    raw = str(source_url).strip()
+    if raw.isdigit():
+        return int(raw)
+
+    parsed = urlparse(raw)
+    if parsed.scheme:
+        return raw
+
+    if _HOST_PORT_RE.match(raw):
+        return f"http://{raw}"
+
+    return raw
+
+
+def _get_network_target(source):
+    if isinstance(source, int):
+        return None
+
+    parsed = urlparse(str(source))
+    if not parsed.scheme or not parsed.hostname:
+        return None
+
+    if parsed.port:
+        return parsed.hostname, parsed.port
+
+    default_port = {
+        "http": 80,
+        "https": 443,
+        "rtsp": 554,
+        "rtmp": 1935,
+    }.get(parsed.scheme.lower())
+    if default_port is None:
+        return None
+
+    return parsed.hostname, default_port
+
+
+def _is_reachable(source, timeout=1.5):
+    target = _get_network_target(source)
+    if target is None:
+        return True
+
+    host, port = target
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        logger.warning("Camera endpoint unreachable: %s:%s", host, port)
+        return False
+
+
 def _open_capture(source):
     """Try each backend in order and return the first that works.
     Catches C++ exceptions from OpenCV that would otherwise crash the process."""
+    source = _normalize_source_url(source)
+
+    if not _is_reachable(source):
+        return None
+
     backends = _BACKENDS if isinstance(source, int) else [cv2.CAP_ANY]
     for backend in backends:
         try:
@@ -84,6 +146,26 @@ class DjangoCameraService:
             'source_url': source_url,
             'checked_at': datetime.now(timezone.utc).isoformat(),
         }
+
+    def probe_source(self, source_url):
+        """Return a real frame for source validation.
+        Unlike stream_frames(), this does not yield placeholders on failure."""
+        source = _normalize_source_url(source_url)
+
+        if not _is_reachable(source):
+            return None, "Camera endpoint is unreachable"
+
+        capture = _open_capture(source)
+        if capture is None:
+            return None, "Unable to open camera source"
+
+        try:
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                return None, "Unable to read a frame from camera source"
+            return frame, None
+        finally:
+            capture.release()
 
     def stream_frames(self, source_url, camera_id=None, annotate_fn=None):
         """Yield JPEG-encoded frames.  If annotate_fn is provided, each raw

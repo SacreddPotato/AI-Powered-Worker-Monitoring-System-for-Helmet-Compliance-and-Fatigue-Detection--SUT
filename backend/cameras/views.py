@@ -1,4 +1,5 @@
 import threading
+import cv2
 from django.http import StreamingHttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -14,6 +15,8 @@ def _make_annotator(camera_id, overlays_csv):
     frames.  Returns None while models are still loading (non-blocking)."""
     from detection.services import get_inference_service
     from detection.models import ModelSetting, CameraModel
+    from cameras.models import Camera
+    from alerts.services import create_alert_from_inference
     from annotation import draw_annotations
 
     overlay_set = set(filter(None, overlays_csv.split(','))) if overlays_csv else None
@@ -27,6 +30,7 @@ def _make_annotator(camera_id, overlays_csv):
             enabled.discard(ov.model_setting_id)
 
     svc = get_inference_service()
+    camera = Camera.objects.filter(pk=camera_id).first()
 
     # Kick off model loading in background so live frames are never blocked
     if not svc.ready:
@@ -47,6 +51,9 @@ def _make_annotator(camera_id, overlays_csv):
                 new = {}
                 for key in enabled:
                     new[key] = svc.run_inference_on_frame(key, frame, camera_id=camera_id)
+                if camera is not None:
+                    for key, result in new.items():
+                        create_alert_from_inference(camera=camera, model_key=key, result=result)
                 cached.clear()
                 cached.update(new)
             return draw_annotations(frame, cached, enabled_overlays=overlay_set)
@@ -70,9 +77,15 @@ class CameraViewSet(viewsets.ModelViewSet):
         if not source_url:
             return Response({'error': 'source_url required'}, status=400)
         svc = get_camera_service()
-        for frame_bytes in svc.stream_frames(source_url):
-            return HttpResponse(frame_bytes, content_type='image/jpeg')
-        return Response({'error': 'Could not read frame from source'}, status=422)
+        frame, error = svc.probe_source(source_url)
+        if frame is None:
+            return Response({'error': error or 'Could not read frame from source'}, status=422)
+
+        ok, jpeg = cv2.imencode('.jpg', frame)
+        if not ok or jpeg is None:
+            return Response({'error': 'Could not encode probe frame'}, status=500)
+
+        return HttpResponse(jpeg.tobytes(), content_type='image/jpeg')
 
     @action(detail=False, methods=['get'])
     def discover(self, request):

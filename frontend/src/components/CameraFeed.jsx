@@ -1,7 +1,7 @@
 import Badge from "./Badge";
 import useCameraStream from "../hooks/useCameraStream";
 
-export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [] }) {
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [], isDeleting = false }) {
   const { src, status } = useCameraStream(camera.id, overlays);
 
   return (
@@ -44,11 +44,18 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
         <div className="flex items-center gap-2">
           {onDelete && (
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-zinc-600 hover:text-red-400 transition-colors"
+              onClick={(e) => { e.stopPropagation(); if (!isDeleting) onDelete(); }}
+              className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={isDeleting}
               title="Remove camera"
             >
-              <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
+              {isDeleting ? (
+                <svg viewBox="0 0 24 24" className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" /></svg>
+              )}
             </button>
           )}
           <div className="flex items-center gap-1">

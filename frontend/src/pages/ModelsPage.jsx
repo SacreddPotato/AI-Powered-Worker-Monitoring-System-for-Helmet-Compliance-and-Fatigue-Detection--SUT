@@ -6,18 +6,33 @@ export default function ModelsPage() {
   const [models, setModels] = useState([]);
   const [cameras, setCameras] = useState([]);
   const [overrides, setOverrides] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadMs, setLoadMs] = useState(null);
 
   useEffect(() => {
-    api.listModels().then((data) => setModels(data.results || data));
-    api.listCameras().then((data) => {
-      const cams = data.results || data;
-      setCameras(cams);
-      cams.forEach((cam) => {
-        api.listCameraModels(cam.id).then((ov) => {
-          setOverrides((prev) => ({ ...prev, [cam.id]: ov }));
-        });
-      });
-    });
+    let active = true;
+    (async () => {
+      setLoading(true);
+      const startedAt = performance.now();
+      try {
+        const [modelsData, camerasData, overridesData] = await Promise.all([
+          api.listModels(),
+          api.listCameras(),
+          api.listCameraModelsBulk(),
+        ]);
+        if (!active) return;
+        setModels(modelsData.results || modelsData);
+        setCameras(camerasData.results || camerasData);
+        setOverrides(overridesData || {});
+        setLoadMs(Math.round(performance.now() - startedAt));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function toggleGlobal(key, current) {
@@ -44,7 +59,9 @@ export default function ModelsPage() {
         <div className="flex items-baseline gap-2">
           <h1 className="text-base font-semibold text-zinc-50">Model Management</h1>
           <span className="text-xs text-zinc-600">
-            {models.length} models &middot; {models.filter((m) => m.is_enabled).length} active
+            {loading
+              ? "Loading..."
+              : `${models.length} models · ${models.filter((m) => m.is_enabled).length} active${loadMs != null ? ` · ${loadMs} ms` : ""}`}
           </span>
         </div>
       </div>
