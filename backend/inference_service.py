@@ -2,6 +2,7 @@ import base64
 import bz2
 import os
 import re
+import threading
 import urllib.request
 from io import BytesIO
 from typing import Dict, List
@@ -20,6 +21,17 @@ try:
     from fatigue_engine import FatigueHybridEngine
 except Exception as fatigue_import_error:  # pragma: no cover
     FatigueHybridEngine = None
+
+mediapipe_import_error = None
+try:
+    import mediapipe as mp
+except Exception as mediapipe_import_error:  # pragma: no cover
+    mp = None
+
+
+_LEFT_EYE_LANDMARKS = [33, 133, 159, 145, 153, 144, 163, 7]
+_RIGHT_EYE_LANDMARKS = [362, 263, 386, 374, 380, 381, 382, 398]
+_FEATURE_MISSING_CONFIDENCE = 0.7
 
 
 def decode_base64_image(image_base64: str):
@@ -75,6 +87,14 @@ def _iou(box_a, box_b) -> float:
     return inter_area / float(area_a + area_b - inter_area)
 
 
+def _box_center_inside(inner_box, outer_box) -> bool:
+    ix1, iy1, ix2, iy2 = inner_box
+    ox1, oy1, ox2, oy2 = outer_box
+    center_x = (ix1 + ix2) / 2.0
+    center_y = (iy1 + iy2) / 2.0
+    return ox1 <= center_x <= ox2 and oy1 <= center_y <= oy2
+
+
 def _normalize_label(label: str) -> str:
     label = re.sub(r"[_\-]+", " ", str(label).lower())
     label = re.sub(r"\s+", " ", label).strip()
@@ -99,12 +119,16 @@ class PPEModelAdapter:
         }
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
         self.supports_qr = model_key == "vest"
+        self._absence_uses_features = model_key in {"gloves", "goggles"}
 
         self.available = False
         self.load_error = None
         self.download_error = None
         self.downloaded = False
         self._model = None
+        self._mp_hands = None
+        self._mp_face_mesh = None
+        self._feature_lock = threading.Lock()
         self.model_classes = []
         self.matched_labels = []
         self._qr_detector = cv2.QRCodeDetector() if self.supports_qr else None
@@ -158,9 +182,99 @@ class PPEModelAdapter:
             else:
                 self.matched_labels = list(self.model_classes)
             self.available = True
+
+            if self._absence_uses_features:
+                if mp is None:
+                    self.load_error = (
+                        f"{self.load_error}; " if self.load_error else ""
+                    ) + f"MediaPipe unavailable: {mediapipe_import_error}"
+                else:
+                    if self.model_key == "gloves":
+                        self._mp_hands = mp.solutions.hands.Hands(
+                            static_image_mode=False,
+                            max_num_hands=6,
+                            min_detection_confidence=0.35,
+                            min_tracking_confidence=0.35,
+                        )
+                    elif self.model_key == "goggles":
+                        self._mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                            static_image_mode=False,
+                            max_num_faces=6,
+                            refine_landmarks=True,
+                            min_detection_confidence=0.35,
+                            min_tracking_confidence=0.35,
+                        )
         except Exception as exc:
             self.available = False
             self.load_error = str(exc)
+
+    @staticmethod
+    def _points_to_bbox(points, width, height, pad=0.12):
+        if not points:
+            return None
+        xs = [min(width - 1, max(0, int(pt[0] * width))) for pt in points]
+        ys = [min(height - 1, max(0, int(pt[1] * height))) for pt in points]
+        x1, x2 = min(xs), max(xs)
+        y1, y2 = min(ys), max(ys)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        dx = int((x2 - x1) * pad)
+        dy = int((y2 - y1) * pad)
+        x1 = max(0, x1 - dx)
+        y1 = max(0, y1 - dy)
+        x2 = min(width - 1, x2 + dx)
+        y2 = min(height - 1, y2 + dy)
+        return (x1, y1, x2, y2)
+
+    def _detect_feature_regions(self, frame):
+        if not self._absence_uses_features:
+            return []
+
+        if self.model_key == "gloves":
+            return self._detect_hand_regions(frame)
+        if self.model_key == "goggles":
+            return self._detect_eye_regions(frame)
+        return []
+
+    def _detect_hand_regions(self, frame):
+        if self._mp_hands is None:
+            return []
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        with self._feature_lock:
+            res = self._mp_hands.process(frame_rgb)
+        if not res.multi_hand_landmarks:
+            return []
+
+        h, w = frame.shape[:2]
+        out = []
+        for hand in res.multi_hand_landmarks:
+            points = [(lm.x, lm.y) for lm in hand.landmark]
+            bbox = self._points_to_bbox(points, w, h, pad=0.15)
+            if bbox is not None:
+                out.append(bbox)
+        return out
+
+    def _detect_eye_regions(self, frame):
+        if self._mp_face_mesh is None:
+            return []
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        with self._feature_lock:
+            res = self._mp_face_mesh.process(frame_rgb)
+        if not res.multi_face_landmarks:
+            return []
+
+        h, w = frame.shape[:2]
+        out = []
+        for face in res.multi_face_landmarks:
+            left_points = [(face.landmark[idx].x, face.landmark[idx].y) for idx in _LEFT_EYE_LANDMARKS]
+            right_points = [(face.landmark[idx].x, face.landmark[idx].y) for idx in _RIGHT_EYE_LANDMARKS]
+            left_bbox = self._points_to_bbox(left_points, w, h, pad=0.25)
+            right_bbox = self._points_to_bbox(right_points, w, h, pad=0.25)
+            if left_bbox is not None:
+                out.append(left_bbox)
+            if right_bbox is not None:
+                out.append(right_bbox)
+        return out
 
     def _extract_qr(self, frame, boxes) -> str:
         if self._qr_detector is None or len(boxes) == 0:
@@ -201,6 +315,7 @@ class PPEModelAdapter:
             names = results[0].names or {}
             selected_confidences = []
             selected_boxes = []
+            selected_box_coords = []
             selected_box_labels = []
             missing_confidences = []
 
@@ -211,6 +326,8 @@ class PPEModelAdapter:
                 if self.normalized_target_labels and normalized_class_name not in self.normalized_target_labels:
                     continue
                 selected_boxes.append(box)
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                selected_box_coords.append((x1, y1, x2, y2))
                 selected_box_labels.append(normalized_class_name if normalized_class_name else "detected")
                 confidence = float(box.conf[0])
                 selected_confidences.append(confidence)
@@ -220,8 +337,8 @@ class PPEModelAdapter:
             count = len(selected_boxes)
 
             annotation_boxes = []
-            for box, class_name in zip(selected_boxes, selected_box_labels):
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
+            for box_coords, class_name in zip(selected_box_coords, selected_box_labels):
+                x1, y1, x2, y2 = box_coords
                 is_missing = _is_missing_label(class_name)
                 annotation_boxes.append(
                     {
@@ -234,16 +351,56 @@ class PPEModelAdapter:
                     }
                 )
 
-            missing_count = len([b for b in annotation_boxes if b["color"] == "red"])
+            feature_count = 0
+            feature_missing_count = 0
+            feature_missing_confidences = []
+
+            if self._absence_uses_features:
+                feature_boxes = self._detect_feature_regions(frame)
+                feature_count = len(feature_boxes)
+
+                ppe_present_boxes = [
+                    (b["x1"], b["y1"], b["x2"], b["y2"])
+                    for b in annotation_boxes
+                    if b["color"] == "green"
+                ]
+
+                for fx1, fy1, fx2, fy2 in feature_boxes:
+                    feature_box = (fx1, fy1, fx2, fy2)
+                    has_ppe = any(
+                        _box_center_inside(ppe_box, feature_box) or _iou(feature_box, ppe_box) > 0.03
+                        for ppe_box in ppe_present_boxes
+                    )
+                    if not has_ppe:
+                        feature_missing_count += 1
+                        feature_missing_confidences.append(_FEATURE_MISSING_CONFIDENCE)
+                        annotation_boxes.append(
+                            {
+                                "x1": int(fx1),
+                                "y1": int(fy1),
+                                "x2": int(fx2),
+                                "y2": int(fy2),
+                                "label": f"no {self.model_key}",
+                                "color": "red",
+                            }
+                        )
+
+            explicit_missing_count = len([b for b in annotation_boxes if b["color"] == "red"])
+            missing_count = max(explicit_missing_count, feature_missing_count)
             detected = missing_count > 0
             confidence = (
-                max(missing_confidences, default=0.0)
+                max(missing_confidences + feature_missing_confidences, default=0.0)
                 if detected
                 else max(selected_confidences, default=0.0)
             )
             payload = {
                 "count": count,
                 "missing_count": missing_count,
+                "feature_count": feature_count,
+                "feature_missing_count": feature_missing_count,
+                "person_count": feature_count,
+                "person_missing_count": feature_missing_count,
+                "absence_detector": "mediapipe" if self._absence_uses_features else "model_labels",
                 "ok_count": len([b for b in annotation_boxes if b["color"] == "green"]),
                 "boxes": annotation_boxes,
                 "classification": (
