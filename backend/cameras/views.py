@@ -17,6 +17,7 @@ def _make_annotator(camera_id, overlays_csv):
     from cameras.models import Camera
     from alerts.services import create_alert_from_inference
     from annotation import draw_annotations
+    from .inference_status import mark_loading, mark_disabled, mark_running, mark_error
 
     overlay_set = set(filter(None, overlays_csv.split(','))) if overlays_csv else None
 
@@ -25,6 +26,7 @@ def _make_annotator(camera_id, overlays_csv):
 
     # Kick off model loading in background so live frames are never blocked
     if not svc.ready:
+        mark_loading(camera_id)
         threading.Thread(target=svc.preload, daemon=True).start()
 
     cached = {}
@@ -34,6 +36,7 @@ def _make_annotator(camera_id, overlays_csv):
     def annotate(frame):
         # While models are still loading, return raw frame
         if not svc.ready:
+            mark_loading(camera_id)
             return frame
 
         counter[0] += 1
@@ -42,6 +45,7 @@ def _make_annotator(camera_id, overlays_csv):
                 enabled = get_effective_enabled_model_keys(camera_id)
                 if not enabled:
                     cached.clear()
+                    mark_disabled(camera_id)
                     return frame
                 new = {}
                 for key in enabled:
@@ -49,10 +53,13 @@ def _make_annotator(camera_id, overlays_csv):
                 if camera is not None:
                     for key, result in new.items():
                         create_alert_from_inference(camera=camera, model_key=key, result=result)
+                detected_count = sum(1 for item in new.values() if bool(item.get('detected')))
+                mark_running(camera_id, model_keys=enabled, detected_count=detected_count)
                 cached.clear()
                 cached.update(new)
             return draw_annotations(frame, cached, enabled_overlays=overlay_set)
         except Exception:
+            mark_error(camera_id, 'inference_exception')
             return frame  # raw frame on any inference error
 
     return annotate
@@ -95,6 +102,13 @@ class CameraViewSet(viewsets.ModelViewSet):
         svc = get_camera_service()
         result = svc.check_camera_status(camera.source_url)
         return Response(result)
+
+    @action(detail=True, methods=['get'])
+    def inference(self, request, pk=None):
+        from .inference_status import get_inference_status
+
+        camera = self.get_object()
+        return Response(get_inference_status(camera.id))
 
     @action(detail=True, methods=['get'])
     def snapshot(self, request, pk=None):

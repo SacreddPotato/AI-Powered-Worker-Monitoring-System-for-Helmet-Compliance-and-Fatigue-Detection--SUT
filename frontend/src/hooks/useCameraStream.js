@@ -6,10 +6,10 @@ import { useEffect, useRef, useState } from "react";
  * arrives or the hook unmounts.
  *
  * @param {number|null} cameraId  Camera PK (null to disconnect)
- * @param {string[]}    overlays  Model keys for annotation overlays
+ * @param {string[]|undefined|null} overlays  Model keys for annotation overlays; omit/null for all
  * @returns {{ src: string|null, status: "connecting"|"live"|"error" }}
  */
-export default function useCameraStream(cameraId, overlays = []) {
+export default function useCameraStream(cameraId, overlays = null) {
   const [src, setSrc] = useState(null);
   const [status, setStatus] = useState("connecting");
   const wsRef = useRef(null);
@@ -37,8 +37,10 @@ export default function useCameraStream(cameraId, overlays = []) {
       ws.onopen = () => {
         if (disposed) { ws.close(); return; }
         setStatus("live");
-        // Send overlay configuration
-        ws.send(JSON.stringify({ overlays }));
+        // Send overlay configuration only when explicitly provided.
+        if (Array.isArray(overlays)) {
+          ws.send(JSON.stringify({ overlays }));
+        }
       };
 
       ws.onmessage = (e) => {
@@ -85,10 +87,10 @@ export default function useCameraStream(cameraId, overlays = []) {
   // When overlays change, send updated config over the existing WS
   useEffect(() => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN && Array.isArray(overlays)) {
       ws.send(JSON.stringify({ overlays }));
     }
-  }, [overlays.join(",")]);
+  }, [Array.isArray(overlays) ? overlays.join(",") : "__all__"]);
 
   return { src, status };
 }

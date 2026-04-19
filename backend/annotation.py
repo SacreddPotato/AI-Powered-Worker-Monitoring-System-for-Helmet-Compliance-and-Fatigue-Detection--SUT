@@ -18,6 +18,9 @@ _MODEL_COLORS = {
     'vest': _COLORS['blue'],
     'gloves': _COLORS['yellow'],
     'goggles': _COLORS['cyan'],
+    'boots': _COLORS['yellow'],
+    'faceshield': _COLORS['cyan'],
+    'safetysuit': _COLORS['blue'],
 }
 
 _FONT = cv2.FONT_HERSHEY_SIMPLEX

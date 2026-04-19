@@ -3,10 +3,17 @@ import { api } from "../api";
 import Toggle from "../components/Toggle";
 import LoadingCircle from "../components/LoadingCircle";
 
+const SEVERITY_LEVELS = ["high", "medium", "low"];
+
 export default function ModelsPage() {
   const [models, setModels] = useState([]);
   const [cameras, setCameras] = useState([]);
   const [overrides, setOverrides] = useState({});
+  const [severityMatrix, setSeverityMatrix] = useState({});
+  const [globalSeverityDraft, setGlobalSeverityDraft] = useState({});
+  const [globalSeverityOpen, setGlobalSeverityOpen] = useState(false);
+  const [applyingGlobalSeverity, setApplyingGlobalSeverity] = useState(false);
+  const [savingSeverityKey, setSavingSeverityKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadMs, setLoadMs] = useState(null);
 
@@ -16,15 +23,25 @@ export default function ModelsPage() {
       setLoading(true);
       const startedAt = performance.now();
       try {
-        const [modelsData, camerasData, overridesData] = await Promise.all([
+        const [modelsData, camerasData, overridesData, severityData] = await Promise.all([
           api.listModels(),
           api.listCameras(),
           api.listCameraModelsBulk(),
+          api.getAlertSeverityMatrix(),
         ]);
         if (!active) return;
-        setModels(modelsData.results || modelsData);
-        setCameras(camerasData.results || camerasData);
+        const modelList = modelsData.results || modelsData;
+        const cameraList = camerasData.results || camerasData;
+        setModels(modelList);
+        setCameras(cameraList);
         setOverrides(overridesData || {});
+        setSeverityMatrix(severityData?.matrix || {});
+        const defaults = severityData?.defaults || {};
+        const draft = {};
+        modelList.forEach((m) => {
+          draft[m.key] = defaults[m.key] || "low";
+        });
+        setGlobalSeverityDraft(draft);
         setLoadMs(Math.round(performance.now() - startedAt));
       } finally {
         if (active) setLoading(false);
@@ -53,6 +70,57 @@ export default function ModelsPage() {
     const ovs = overrides[camId] || [];
     const found = ovs.find((o) => o.model_key === modelKey);
     return found ? found.is_enabled : true;
+  }
+
+  function getCameraSeverity(camId, modelKey) {
+    return severityMatrix?.[camId]?.[modelKey] || globalSeverityDraft?.[modelKey] || "low";
+  }
+
+  async function updateCameraSeverity(camId, modelKey, severity) {
+    const previous = severityMatrix;
+    setSeverityMatrix((prev) => ({
+      ...prev,
+      [camId]: {
+        ...(prev[camId] || {}),
+        [modelKey]: severity,
+      },
+    }));
+    setSavingSeverityKey(`${camId}:${modelKey}`);
+    try {
+      await api.updateCameraAlertSeverity(camId, modelKey, severity);
+    } catch {
+      setSeverityMatrix(previous);
+      alert("Failed to update camera alert severity.");
+    } finally {
+      setSavingSeverityKey("");
+    }
+  }
+
+  async function applyGlobalSeverityOverride() {
+    if (!Object.keys(globalSeverityDraft).length) return;
+    setApplyingGlobalSeverity(true);
+    try {
+      await api.applyGlobalAlertSeverity(globalSeverityDraft);
+      const severityData = await api.getAlertSeverityMatrix();
+      setSeverityMatrix(severityData?.matrix || {});
+    } catch {
+      alert("Failed to apply global severity override.");
+    } finally {
+      setApplyingGlobalSeverity(false);
+    }
+  }
+
+  function severityButtonClass(isActive, level) {
+    if (!isActive) {
+      return "text-zinc-500 hover:text-zinc-300";
+    }
+    if (level === "high") {
+      return "text-red-300 bg-red-500/10";
+    }
+    if (level === "medium") {
+      return "text-amber-300 bg-amber-500/10";
+    }
+    return "text-emerald-300 bg-emerald-500/10";
   }
 
   return (
@@ -147,6 +215,119 @@ export default function ModelsPage() {
                       </div>
                     </td>
                   ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <h2 className="text-sm font-semibold text-zinc-50 mt-9 mb-1">Alert Severity Settings</h2>
+        <p className="text-[10px] text-zinc-600 mb-4">
+          Edit alert severity per camera/model. The global action applies a one-time overwrite to all camera severities and does not lock per-camera edits.
+        </p>
+
+        <div className="max-w-[560px] mb-4">
+          <button
+            type="button"
+            onClick={() => setGlobalSeverityOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 bg-surface-alt border border-zinc-800 rounded-lg px-3 py-2 text-left hover:border-zinc-700 transition-colors"
+          >
+            <span className="text-[10px] text-zinc-300 uppercase tracking-wider">One-time global override</span>
+            <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+              {globalSeverityOpen ? "Hide" : "Configure"}
+              <svg
+                viewBox="0 0 16 16"
+                className={`w-3 h-3 transition-transform ${globalSeverityOpen ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <polyline points="3 6 8 11 13 6" />
+              </svg>
+            </span>
+          </button>
+
+          {globalSeverityOpen && (
+            <div className="mt-2 bg-surface-alt border border-zinc-800 rounded-lg p-3">
+              <div className="max-h-[280px] overflow-y-auto pr-1 space-y-2">
+                {models.map((m) => {
+                  const selected = globalSeverityDraft[m.key] || "low";
+                  return (
+                    <div
+                      key={`global-${m.key}`}
+                      className="flex items-center justify-between gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5"
+                    >
+                      <span className="text-[10px] text-zinc-300 whitespace-nowrap">{m.display_name || m.key}</span>
+                      <div className="inline-flex rounded-md border border-zinc-800 bg-zinc-950 overflow-hidden">
+                        {SEVERITY_LEVELS.map((level) => {
+                          const active = selected === level;
+                          return (
+                            <button
+                              key={`${m.key}-${level}`}
+                              type="button"
+                              onClick={() => setGlobalSeverityDraft((prev) => ({ ...prev, [m.key]: level }))}
+                              className={`px-1.5 py-0.5 text-[9px] font-semibold transition-colors ${severityButtonClass(active, level)}`}
+                              title={`${m.display_name || m.key}: ${level}`}
+                            >
+                              {level === "high" ? "H" : level === "medium" ? "M" : "L"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={applyGlobalSeverityOverride}
+                  disabled={applyingGlobalSeverity}
+                  className="px-3 py-1 rounded-lg border text-[10px] font-medium bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 disabled:opacity-40"
+                >
+                  {applyingGlobalSeverity ? "Applying..." : "Apply to all cameras"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left text-[9px] text-zinc-600 uppercase tracking-wider px-3 py-2 border-b border-zinc-800">Camera</th>
+                {models.map((m) => (
+                  <th key={`sev-${m.key}`} className="text-center text-[9px] text-zinc-600 uppercase tracking-wider px-3 py-2 border-b border-zinc-800 capitalize">
+                    {m.key}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cameras.map((cam) => (
+                <tr key={`sev-row-${cam.id}`}>
+                  <td className="px-3 py-2 border-b border-zinc-800/50">
+                    <span className="text-[11px] text-zinc-400">{cam.name}</span>
+                  </td>
+                  {models.map((m) => {
+                    const cellKey = `${cam.id}:${m.key}`;
+                    return (
+                      <td key={`sev-cell-${cam.id}-${m.key}`} className="text-center px-3 py-2 border-b border-zinc-800/50">
+                        <select
+                          value={getCameraSeverity(cam.id, m.key)}
+                          onChange={(e) => updateCameraSeverity(cam.id, m.key, e.target.value)}
+                          className="bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1 text-[10px] text-zinc-300"
+                        >
+                          <option value="high">High</option>
+                          <option value="medium">Medium</option>
+                          <option value="low">Low</option>
+                        </select>
+                        {savingSeverityKey === cellKey && (
+                          <div className="text-[8px] text-zinc-500 mt-1">Saving...</div>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

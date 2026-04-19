@@ -84,3 +84,31 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Frontend SPA serving
 FRONTEND_DIR = BASE_DIR / '..' / 'frontend' / 'dist'
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '%(asctime)s %(levelname)s [%(name)s] %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.environ.get('LOG_LEVEL', 'WARNING'),
+    },
+    'loggers': {
+        'cameras': {
+            'handlers': ['console'],
+            'level': os.environ.get('CAMERA_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+    },
+}

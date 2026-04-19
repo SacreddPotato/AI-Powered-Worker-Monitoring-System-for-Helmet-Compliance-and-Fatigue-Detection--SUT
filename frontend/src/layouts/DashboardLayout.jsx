@@ -6,6 +6,8 @@ import LoadingCircle from "../components/LoadingCircle";
 import { createAlertSocket } from "../ws";
 import { api } from "../api";
 
+const ROUTE_LOADING_MIN_MS = 420;
+
 export default function DashboardLayout() {
   const [toasts, setToasts] = useState([]);
   const [alertCount, setAlertCount] = useState(0);
@@ -47,7 +49,7 @@ export default function DashboardLayout() {
     const t = setTimeout(() => {
       setRouteLoading(false);
       setPendingPath(null);
-    }, 220);
+    }, ROUTE_LOADING_MIN_MS);
     return () => clearTimeout(t);
   }, [routeLoading, pendingPath, location.pathname]);
 
@@ -58,7 +60,7 @@ export default function DashboardLayout() {
         <Outlet />
         {routeLoading && (
           <div className="absolute inset-0 bg-[#09090b]/65 backdrop-blur-[1px] z-40">
-            <LoadingCircle label="Loading screen..." />
+            <LoadingCircle label="Switching view..." />
           </div>
         )}
       </main>

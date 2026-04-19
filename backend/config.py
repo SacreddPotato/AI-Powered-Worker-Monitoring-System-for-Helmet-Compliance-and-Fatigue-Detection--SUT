@@ -26,6 +26,12 @@ SHAPE_PREDICTOR_URL = os.environ.get(
     "SHAPE_PREDICTOR_URL",
     "https://github.com/davisking/dlib-models/raw/master/shape_predictor_68_face_landmarks.dat.bz2",
 )
+BOOTS_MODEL_URL = os.environ.get(
+    "BOOTS_MODEL_URL",
+    "https://huggingface.co/keremberke/yolov8n-boots-detection/resolve/main/best.pt",
+)
+FACESHIELD_MODEL_URL = os.environ.get("FACESHIELD_MODEL_URL", "")
+SAFETY_SUIT_MODEL_URL = os.environ.get("SAFETY_SUIT_MODEL_URL", "")
 
 MODEL_DEFINITIONS = {
     "helmet": {
@@ -67,6 +73,30 @@ MODEL_DEFINITIONS = {
         "download_urls": [],
         "target_labels": ["goggles", "goggle", "no_goggles", "no-goggles"],
     },
+    "boots": {
+        "display_name": "Boot Detection",
+        "description": "Detects worker safety boots.",
+        "weights_path": str(ML_MODELS_DIR / "boots_detection.pt"),
+        "download_urls": [BOOTS_MODEL_URL],
+        "target_labels": ["boot", "boots", "safety boot", "safety boots", "no_boot", "no-boots", "no boots"],
+        "strict_target_match": False,
+    },
+    "faceshield": {
+        "display_name": "Face Shield Detection",
+        "description": "Detects protective face shields.",
+        "weights_path": str(ML_MODELS_DIR / "faceshield_detection.pt"),
+        "download_urls": [FACESHIELD_MODEL_URL],
+        "target_labels": ["face shield", "faceshield", "shield", "no_face_shield", "no-faceshield", "no shield"],
+        "strict_target_match": False,
+    },
+    "safetysuit": {
+        "display_name": "Safety Suit Detection",
+        "description": "Detects protective safety suits/coveralls.",
+        "weights_path": str(ML_MODELS_DIR / "safety_suit_detection.pt"),
+        "download_urls": [SAFETY_SUIT_MODEL_URL],
+        "target_labels": ["safety suit", "safetysuit", "coverall", "protective suit", "no_safety_suit", "no safety suit"],
+        "strict_target_match": False,
+    },
 }
 
 DEFAULT_ALERT_CONFIDENCE_THRESHOLD = 0.45
@@ -85,6 +115,9 @@ def ensure_ml_models_layout() -> None:
         "vest_detection.pt",
         "gloves_detection.pt",
         "goggles_detection.pt",
+        "boots_detection.pt",
+        "faceshield_detection.pt",
+        "safety_suit_detection.pt",
     ]
 
     for name in legacy_names:

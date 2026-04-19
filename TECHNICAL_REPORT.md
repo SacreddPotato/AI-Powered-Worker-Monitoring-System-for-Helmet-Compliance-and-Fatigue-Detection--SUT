@@ -8,12 +8,14 @@
    - 2.2 [PPE Detection (YOLOv8)](#22-ppe-detection-yolov8)
    - 2.3 [Fatigue Detection (SwinV2-S + dlib)](#23-fatigue-detection-swinv2-s--dlib)
    - 2.4 [Annotation Rendering](#24-annotation-rendering)
+    - 2.5 [Model Selection Rationale](#25-model-selection-rationale)
 3. [Backend Architecture](#3-backend-architecture)
    - 3.1 [Django Configuration](#31-django-configuration)
    - 3.2 [ASGI & WebSocket Routing](#32-asgi--websocket-routing)
    - 3.3 [Database Schema](#33-database-schema)
    - 3.4 [Django Applications](#34-django-applications)
    - 3.5 [REST API Reference](#35-rest-api-reference)
+    - 3.6 [API Usage Matrix](#36-api-usage-matrix)
 4. [Frontend Architecture](#4-frontend-architecture)
    - 4.1 [Application Structure](#41-application-structure)
    - 4.2 [Pages](#42-pages)
@@ -28,18 +30,21 @@
 
 ## 1. System Overview
 
-**Sentinel** is a real-time worker safety monitoring system that uses computer vision and deep learning to detect helmet compliance, PPE violations, and worker fatigue from IP camera feeds. The system provides a web-based dashboard for monitoring multiple cameras simultaneously with live annotated video streams, an alert center, model management, and a developer lab for offline video analysis.
+**SafeVision AI** is a real-time worker safety monitoring system that uses computer vision and deep learning to detect helmet compliance, PPE violations, and worker fatigue from IP camera feeds. The current stack supports eight detection model keys (`helmet`, `fatigue`, `vest`, `gloves`, `goggles`, `boots`, `faceshield`, `safetysuit`) with per-camera enablement, per-camera severity policy, and real-time alerting.
+
+The dashboard includes live monitoring, alert center analytics, model/severity management, and a developer lab for controlled video and threshold testing. It is designed for low-latency inference with practical operations controls rather than offline-only batch workflows.
 
 ### Technology Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Backend Framework** | Django 5.0 + Django REST Framework | REST API, ORM, admin |
+| **Backend Framework** | Django 5.x + Django REST Framework | REST API, ORM, admin |
 | **ASGI Server** | Daphne | Serves HTTP and WebSocket on a single port |
-| **WebSocket** | Django Channels (InMemoryChannelLayer) | Real-time alert push, live video analysis streaming |
-| **Object Detection** | YOLOv8n (Ultralytics) | Helmet, vest, gloves, goggles detection |
+| **WebSocket** | Django Channels (InMemoryChannelLayer) | Real-time alert push, camera binary frame streaming, live video analysis streaming |
+| **Object Detection** | YOLOv8n (Ultralytics) | Helmet and PPE detection (vest, gloves, goggles, boots, faceshield, safetysuit) |
 | **Fatigue Model** | Swin Vision Transformer v2-Small | Drowsiness classification from face patches |
 | **Facial Landmarks** | dlib 68-point shape predictor | EAR/MAR computation, head pose estimation |
+| **Feature Assist** | MediaPipe Hands / Face Mesh | Robust glove/goggle absence estimation when explicit `no_*` classes are weak |
 | **Computer Vision** | OpenCV | Frame capture, image processing, head pose via PnP |
 | **Frontend Framework** | React 18 | Single-page application |
 | **Build Tool** | Vite 5 | Development server, production bundling |
@@ -81,7 +86,13 @@
 
 ## 2. Machine Learning Pipeline
 
-The system runs **five detection models** — helmet, fatigue, vest, gloves, and goggles — each independently toggleable per-camera. All models are loaded lazily on first use and downloaded automatically from HuggingFace.
+The system runs **eight detection model keys** — helmet, fatigue, vest, gloves, goggles, boots, faceshield, and safetysuit. Models are independently toggleable per-camera, loaded lazily on first use, and support automatic download where URLs are configured.
+
+### Why this model stack?
+
+- **YOLOv8n for PPE:** chosen for strong real-time throughput on CPU/GPU with simple deployment; compared to heavier detectors, it gives lower latency and easier operational tuning.
+- **SwinV2-S + dlib for fatigue:** chosen over a pure detector because fatigue is temporal/physiological; combining deep features with EAR/MAR and head pose improves robustness and interpretability.
+- **Hybrid architecture:** keeps mission-critical alerts explainable (landmark metrics + trigger reasons) while retaining modern model accuracy.
 
 ### 2.1 Helmet Detection (YOLOv8)
 
@@ -158,15 +169,18 @@ The dual-threshold IoU approach (2% body, 8% head) prevents false negatives when
 | **Source** | `Tanishjain9/yolov8n-ppe-detection-6classes` on HuggingFace |
 | **Input** | BGR image frame |
 | **Inference Confidence** | 0.35 |
-| **Task** | Multi-class PPE detection (vest, gloves, goggles) |
+| **Task** | Multi-class PPE detection (vest, gloves, goggles, boots, faceshield, safetysuit) |
 
-All three PPE models (vest, gloves, goggles) share the same YOLOv8 weights but filter for different target labels:
+PPE adapters use YOLOv8 with model-specific target label filtering and shared post-processing logic:
 
 | Model | Target Labels | Missing Labels |
 |-------|--------------|----------------|
 | **Vest** | vest, safety vest, safety_vest | — |
 | **Gloves** | glove, gloves | no_glove, no-glove |
 | **Goggles** | goggles, goggle | no_goggles, no-goggles |
+| **Boots** | boot, boots, safety boot | no_boot, no-boots |
+| **Face Shield** | face shield, faceshield, shield | no_face_shield, no shield |
+| **Safety Suit** | safety suit, safetysuit, coverall | no_safety_suit |
 
 #### Detection Logic
 
@@ -182,6 +196,12 @@ The vest adapter has an additional QR code detection step:
 - Uses OpenCV's `QRCodeDetector` to read QR codes within detected vest bounding boxes
 - Falls back to scanning the full frame if no QR found in the box
 - Extracted data is stored as `vest_id` in the payload for worker identification
+
+#### Why YOLOv8 for PPE instead of alternatives?
+
+- **Operational simplicity:** single framework (Ultralytics) for loading, inference, class metadata, and deployment.
+- **Latency advantage:** `YOLOv8n` is fast enough for multi-camera live overlays with periodic inference.
+- **Adaptability:** class-name driven filtering lets one engine support multiple PPE policies without custom post-training code per endpoint.
 
 #### Output Format
 
@@ -207,6 +227,12 @@ The vest adapter has an additional QR code detection step:
 ### 2.3 Fatigue Detection (SwinV2-S + dlib)
 
 Fatigue detection is the most complex model in the system, combining a deep learning vision transformer with classical computer vision techniques in a **hybrid scoring pipeline**.
+
+#### Why SwinV2 + landmarks instead of a single detector?
+
+- **Temporal fatigue cues** (eye closure patterns, yawning, nodding) are better captured with hybrid reasoning than object boxes alone.
+- **Interpretability:** EAR/MAR/tilt metrics are inspectable and tunable in DevLab, which is hard with opaque-only classifiers.
+- **Stability:** consecutive-frame thresholds reduce transient false alerts from blinks or brief expression changes.
 
 #### Model Architecture
 
@@ -378,7 +404,7 @@ An independent head tilt check also triggers if `max(|pitch|, |roll|) > 15°` (p
 
 The annotation module (`annotation.py`) draws detection results onto video frames using OpenCV:
 
-**PPE Models** (helmet, vest, gloves, goggles):
+**PPE Models** (helmet, vest, gloves, goggles, boots, faceshield, safetysuit):
 - Colored bounding boxes with labels and confidence percentages
 - Red boxes for missing items, green for compliant items
 
@@ -397,6 +423,22 @@ The annotation module (`annotation.py`) draws detection results onto video frame
 | Vest | (255, 160, 50) | Blue |
 | Gloves | (0, 220, 255) | Yellow |
 | Goggles | (220, 200, 0) | Cyan |
+| Boots | (0, 220, 255) | Yellow |
+| Face Shield | (220, 200, 0) | Cyan |
+| Safety Suit | (255, 160, 50) | Blue |
+
+### 2.5 Model Selection Rationale
+
+| Model Key | Technology | Why chosen | Advantage in this system |
+|-----------|------------|------------|--------------------------|
+| `helmet` | YOLOv8n + YOLOv8n person model | Helmet-only classes often miss context; dual-stage matching improves compliance reasoning | Better missing-helmet inference at low latency |
+| `vest` | YOLOv8n PPE adapter + OpenCV QR detector | Single detector with lightweight post-processing is operationally simple | Real-time detection + optional worker ID extraction |
+| `gloves` | YOLOv8n PPE adapter + MediaPipe Hands assist | Gloves can be tiny/occluded; explicit `no_*` labels are inconsistent | More robust missing-glove estimation on noisy feeds |
+| `goggles` | YOLOv8n PPE adapter + MediaPipe Face Mesh assist | Eye PPE classes can be unstable at distance | Better robustness for missing-eye-protection inference |
+| `boots` | YOLOv8n | Same runtime stack as existing PPE models | Fast integration with existing overlays/alerts |
+| `faceshield` | YOLOv8n | Works with existing class-filter inference path | Consistent deployment and maintenance path |
+| `safetysuit` | YOLOv8n | Keeps PPE logic unified across garment classes | Low-friction extension to per-camera policy controls |
+| `fatigue` | SwinV2-S + dlib landmarks + OpenCV PnP | Fatigue is behavior/state, not only object presence | Hybrid explainable scoring with tunable safety thresholds |
 
 ---
 
@@ -406,7 +448,7 @@ The annotation module (`annotation.py`) draws detection results onto video frame
 
 | Setting | Value |
 |---------|-------|
-| **Framework** | Django 5.0 |
+| **Framework** | Django 5.x |
 | **ASGI Server** | Daphne |
 | **Database** | SQLite (`backend/monitoring.db`) |
 | **Channel Layer** | InMemoryChannelLayer |
@@ -427,8 +469,9 @@ The application uses Django Channels' `ProtocolTypeRouter` to handle both HTTP a
 ProtocolTypeRouter
 ├── "http"      → Django ASGI application (all REST endpoints)
 └── "websocket" → URLRouter
-    ├── ws/alerts/          → AlertConsumer
-    └── ws/video-analysis/  → VideoAnalysisConsumer
+  ├── ws/alerts/                     → AlertConsumer
+  ├── ws/cameras/{camera_id}/stream/ → CameraStreamConsumer
+  └── ws/video-analysis/             → VideoAnalysisConsumer
 ```
 
 ### 3.3 Database Schema
@@ -448,7 +491,7 @@ ProtocolTypeRouter
 
 | Field | Type | Description |
 |-------|------|-------------|
-| key | CharField (PK) | Model identifier (helmet, fatigue, vest, gloves, goggles) |
+| key | CharField (PK) | Model identifier (`helmet`, `fatigue`, `vest`, `gloves`, `goggles`, `boots`, `faceshield`, `safetysuit`) |
 | is_enabled | BooleanField | Global enable/disable toggle |
 
 #### CameraModel (Per-Camera Override)
@@ -490,7 +533,19 @@ Unique constraint: `(camera, model_setting)` — one override per camera-model p
 | created_at | DateTimeField | Indexed, descending |
 | acknowledged_at | DateTimeField | Timestamp of acknowledgment (nullable) |
 
-**Severity Mapping:** helmet/fatigue → `high`, vest → `medium`, gloves/goggles → `low`
+#### CameraAlertSeverity
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | AutoField (PK) | Primary key |
+| camera | ForeignKey → Camera | Target camera |
+| model_key | CharField(50) | Model severity is defined for |
+| severity | CharField | high, medium, low |
+| updated_at | DateTimeField | Last policy update timestamp |
+
+Unique constraint: `(camera, model_key)`.
+
+**Severity Resolution:** `CameraAlertSeverity` override (if present) → default map in `alerts/services.py`.
 
 #### DevVideo
 
@@ -511,7 +566,7 @@ Handles camera CRUD, connectivity checks, MJPEG streaming, and device discovery.
 
 **Key Features:**
 - **MJPEG Streaming:** `StreamingHttpResponse` with multipart/x-mixed-replace content type, yielding JPEG-encoded frames
-- **Annotated Streams:** Optional real-time annotation overlay — inference runs every 3rd frame, results are cached and drawn on intermediate frames
+- **Annotated Streams:** Optional real-time annotation overlay — live camera stream inference runs periodically (5-frame cadence) with cached intermediate overlays
 - **Device Discovery:** Probes system camera indices 0–9, returns available devices with resolution info
 - **Background Model Loading:** Models preload asynchronously so raw frames start streaming immediately
 
@@ -543,6 +598,11 @@ Manages alert records and WebSocket broadcasting.
 3. `broadcast_alert()` sends the alert to the `alerts` WebSocket group
 4. All connected clients receive the alert in real-time
 
+**Severity Policy Features:**
+- Per-camera, per-model severity is editable through API/UI.
+- A one-time "apply global override" action writes selected severities to all camera policies.
+- The global apply action does not lock camera policies; camera values remain editable afterward.
+
 #### DevLab App
 
 Provides developer tools: video upload/analysis, threshold tuning, and system performance monitoring.
@@ -566,16 +626,22 @@ Provides developer tools: video upload/analysis, threshold tuning, and system pe
 | GET/POST | `/api/v1/cameras/` | List or create cameras |
 | GET/PUT/DELETE | `/api/v1/cameras/{id}/` | Camera CRUD |
 | GET | `/api/v1/cameras/discover/` | Discover local video devices |
+| POST | `/api/v1/cameras/probe/` | Validate a source URL and return JPEG preview frame |
 | GET | `/api/v1/cameras/{id}/status/` | Camera connectivity check |
+| GET | `/api/v1/cameras/{id}/snapshot/` | Single frame snapshot |
 | GET | `/api/v1/cameras/{id}/stream/` | MJPEG stream (`?annotated=1&overlays=helmet,fatigue`) |
-| GET/PUT | `/api/v1/models/` | List or update model settings |
+| GET | `/api/v1/models/` | List model settings |
 | GET/PUT | `/api/v1/models/{key}/` | Single model setting |
-| GET/PUT | `/api/v1/cameras/{id}/models/` | Per-camera model overrides |
+| GET | `/api/v1/cameras/models/overrides/` | Bulk camera-model override state |
+| GET | `/api/v1/cameras/{id}/models/` | Per-camera model overrides |
 | PUT | `/api/v1/cameras/{id}/models/{key}/` | Single camera-model override |
 | POST | `/api/v1/detections/analyze/` | Run inference on camera frame |
 | GET | `/api/v1/detections/` | List detection records |
 | GET | `/api/v1/alerts/` | List alerts (filterable by status, severity, camera) |
 | PATCH | `/api/v1/alerts/{id}/acknowledge/` | Acknowledge an alert |
+| GET | `/api/v1/alerts/severity/matrix/` | Get effective severity matrix (models × cameras) |
+| PUT | `/api/v1/alerts/severity/cameras/{camera_id}/{model_key}/` | Set severity for one camera-model pair |
+| POST | `/api/v1/alerts/severity/apply-global/` | One-time apply severity map to all cameras |
 | GET/POST | `/api/v1/dev/videos/` | List or upload videos |
 | GET | `/api/v1/dev/videos/{id}/file/` | Download video file |
 | GET | `/api/v1/dev/videos/{id}/stream/` | MJPEG video stream |
@@ -588,7 +654,24 @@ Provides developer tools: video upload/analysis, threshold tuning, and system pe
 | URL | Consumer | Purpose |
 |-----|----------|---------|
 | `ws://host/ws/alerts/` | AlertConsumer | Real-time alert push |
+| `ws://host/ws/cameras/{camera_id}/stream/` | CameraStreamConsumer | Binary JPEG camera streaming with dynamic overlays |
 | `ws://host/ws/video-analysis/` | VideoAnalysisConsumer | Live video analysis streaming |
+
+### 3.6 API Usage Matrix
+
+This project uses both **internal application APIs** and **external service interfaces**.
+
+| API / Interface | Type | Used For | Why this choice |
+|-----------------|------|----------|-----------------|
+| DRF REST (`/api/v1/*`) | Internal HTTP API | CRUD, settings, analytics, exports, thresholds | Easy schema evolution, predictable integration for React views |
+| Channels WebSocket (`/ws/*`) | Internal realtime API | Push alerts, low-latency streams, video-analysis frames | Lower polling overhead and better UX for live operations |
+| Ultralytics Python API (`YOLO(...)`) | External library API | Load/infer YOLO checkpoints; expose class metadata | Fast integration and consistent inference code path |
+| PyTorch API | External library API | Load/run Swin checkpoint and tensor transforms | Required runtime for transformer fatigue model |
+| dlib API | External library API | 68-point landmarks for EAR/MAR/pose inputs | Stable classical face landmarks; interpretable signals |
+| OpenCV API | External library API | Capture, encode, draw overlays, PnP head pose, QR detection | Production-ready CV primitives with strong ecosystem support |
+| MediaPipe API | External library API | Hand/face feature regions to assist glove/goggle absence logic | Improves robustness where object classes are small/ambiguous |
+| HuggingFace model URLs (HTTP) | External model source | Optional automatic model downloads on missing files | Simplifies first-run setup and model distribution |
+| `nvidia-smi` CLI query | External system API | GPU utilization/memory telemetry for DevLab | Lightweight and vendor-standard metrics path |
 
 ---
 
@@ -612,9 +695,10 @@ The frontend is a React 18 SPA built with Vite and styled with Tailwind CSS v4, 
 
 | Path | Component | Description |
 |------|-----------|-------------|
-| `/` | FeedsPage | Live camera grid with alert sidebar |
+| `/` | LandingPage | Project overview and launch CTA |
+| `/feeds` | FeedsPage | Live camera grid with alert sidebar |
 | `/alerts` | AlertsPage | Alert center with grouping modes |
-| `/models` | ModelsPage | Model management and per-camera overrides |
+| `/models` | ModelsPage | Model + severity policy management |
 | `/devlab` | DevLabPage | Video analysis, live camera test, threshold tuning |
 
 **Build Configuration (vite.config.js):**
@@ -623,14 +707,15 @@ The frontend is a React 18 SPA built with Vite and styled with Tailwind CSS v4, 
 
 ### 4.2 Pages
 
-#### Live Camera Feeds (`/`)
+#### Live Camera Feeds (`/feeds`)
 
 - **Camera Grid:** 2-column layout with a hero camera (promoted on click)
-- **MJPEG Streams:** `<img>` elements loading annotated streams from the backend
-- **Overlay Toggles:** Checkboxes to enable/disable each detection model's annotations
+- **MJPEG/WebSocket Streams:** Camera tiles consume live stream frames from backend camera stream endpoints
 - **Add Camera Dialog:** Form with device discovery integration — scans local camera indices
 - **Alert Sidebar:** 280px right panel showing the latest open alerts grouped by severity
 - **Polling:** Alerts refresh every 5 seconds via REST
+- **Hugging Face Demo Guardrail:** Full-page warning in the main area (dismissible) because camera access is not supported on HF-hosted demo URLs; a smaller warning persists after dismissal
+- **Badge De-duplication:** Camera badges are grouped by alert type and display elapsed time since last trigger
 
 #### Alert Center (`/alerts`)
 
@@ -642,9 +727,13 @@ The frontend is a React 18 SPA built with Vite and styled with Tailwind CSS v4, 
 
 #### Model Management (`/models`)
 
-- **Global Settings:** Grid of model cards with toggle switches (Helmet, Fatigue, Vest, Gloves, Goggles)
+- **Global Model Settings:** Grid of model cards with toggle switches
 - **Per-Camera Overrides:** Table with cameras as rows, models as columns, toggle switches in each cell
 - **Override Resolution:** Per-camera setting overrides global; if no override exists, global setting applies
+- **Alert Severity Settings:**
+  - Per-camera, per-model severity (`high|medium|low`) is editable directly in matrix form
+  - Global one-time override applies selected severities to all cameras
+  - Global apply does not lock per-camera editing
 
 #### Developer Lab (`/devlab`)
 
@@ -676,11 +765,12 @@ Three tabs (all stay mounted to preserve state):
 | Component | Purpose |
 |-----------|---------|
 | **IconRail** | Vertical navigation sidebar (56px) with route links and alert count badge |
-| **CameraFeed** | MJPEG stream display with name/location overlay, LIVE indicator, delete button |
+| **CameraFeed** | Live camera stream tile with name/location overlay, LIVE indicator, delete button |
 | **AlertCard** | Compact alert display with severity color, message, camera, time |
 | **Badge** | Colored status badge (danger, warning, success, info, muted) |
 | **Toggle** | Animated on/off switch (sm/md sizes) |
-| **Toast** | Bottom-right notification stack, auto-dismisses after 8 seconds |
+| **Toast** | Bottom-right notification stack, manual dismiss + auto-dismiss (~8s) |
+| **LoadingCircle** | Centered spinner used for route and page-level loading states |
 
 ### 4.4 State Management
 
@@ -688,10 +778,10 @@ The application uses **component-level state** exclusively — no Redux, Zustand
 
 | Scope | State | Location |
 |-------|-------|----------|
-| Global | Alert count, toast notifications | App.jsx |
-| Feeds | Cameras, alerts, heroId, overlays | FeedsPage.jsx |
+| Global | Alert count, toast notifications, route-transition loading | DashboardLayout.jsx |
+| Feeds | Cameras, alerts, heroId, HF warning dismissal, badge timers | FeedsPage.jsx |
 | Alerts | Alert list, groupBy mode, selected alert | AlertsPage.jsx |
-| Models | Model settings, cameras, overrides | ModelsPage.jsx |
+| Models | Model settings, camera overrides, severity matrix, one-time global severity draft | ModelsPage.jsx |
 | DevLab | Video file/metadata, analysis state, logs, thresholds | DevLabPage.jsx |
 
 **Performance-Critical State (DevLab Video Analysis):**
@@ -727,6 +817,7 @@ Uses React refs to bypass batched state updates in the annotation draw loop:
 - `pulse-dot` (2s) — live indicator
 - `scan` (4s) — horizontal scan line on hero camera
 - `slide-in` (0.3s) — toast notification entry
+- `animate-spin` — loading indicators and in-progress controls
 
 ---
 
@@ -748,7 +839,11 @@ Detection record saved to DB
     └── confidence ≥ threshold
         │
         ▼
-    Alert record created (severity mapped from model type)
+    Severity resolved:
+      camera-model override (if set) else default map
+      │
+      ▼
+    Alert record created
         │
         ▼
     broadcast_alert() → Channels group_send("alerts", ...)
@@ -757,7 +852,7 @@ Detection record saved to DB
     AlertConsumer.alert_new() → WebSocket push to all clients
         │
         ▼
-    React App.jsx onMessage → increment alertCount, show Toast
+    DashboardLayout onMessage → increment alertCount, show Toast
 ```
 
 ### Video Analysis Pipeline
@@ -818,7 +913,12 @@ All thresholds are defined in `backend/config.py` and tunable via the Dev Lab:
 | Model | File | Source |
 |-------|------|--------|
 | Helmet | `ml_models/best.pt` | keremberke/yolov8n-hard-hat-detection |
-| PPE (6-class) | `ml_models/ppe_best.pt` | Tanishjain9/yolov8n-ppe-detection-6classes |
+| Vest | `ml_models/vest_detection.pt` | Project-local / optional PPE source |
+| Gloves | `ml_models/gloves_detection.pt` | Project-local |
+| Goggles | `ml_models/goggles_detection.pt` | Project-local |
+| Boots | `ml_models/boots_detection.pt` | keremberke/yolov8n-boots-detection (configured URL) |
+| Face Shield | `ml_models/faceshield_detection.pt` | Project-local |
+| Safety Suit | `ml_models/safety_suit_detection.pt` | Project-local |
 | Person | `ml_models/yolov8n.pt` | ultralytics/assets |
 | Swin Fatigue | `ml_models/swin_best.pth` | Custom trained |
 | Shape Predictor | `ml_models/shape_predictor_68_face_landmarks.dat` | dlib-models |

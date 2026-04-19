@@ -1,8 +1,33 @@
 import Badge from "./Badge";
 import useCameraStream from "../hooks/useCameraStream";
 
-export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [], isDeleting = false, streamDisabled = false }) {
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = null, isDeleting = false, streamDisabled = false, inference = null }) {
   const { src, status } = useCameraStream(streamDisabled ? null : camera.id, overlays);
+  const inferenceStatus = inference?.status || "unknown";
+  const aiLabel = streamDisabled
+    ? "AI DEMO"
+    : inferenceStatus === "running"
+      ? "AI RUNNING"
+      : inferenceStatus === "loading"
+        ? "AI LOADING"
+        : inferenceStatus === "disabled"
+          ? "AI DISABLED"
+          : inferenceStatus === "stale"
+            ? "AI STALE"
+            : inferenceStatus === "error"
+              ? "AI ERROR"
+              : "AI UNKNOWN";
+  const aiClass = streamDisabled
+    ? "text-amber-300"
+    : inferenceStatus === "running"
+      ? "text-emerald-300"
+      : inferenceStatus === "loading"
+        ? "text-blue-300"
+        : inferenceStatus === "disabled"
+          ? "text-zinc-400"
+          : inferenceStatus === "error"
+            ? "text-red-300"
+            : "text-amber-300";
 
   return (
     <div
@@ -42,6 +67,7 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
       <div className="absolute top-2.5 left-3 right-3 flex justify-between items-center z-10">
         <span className="text-[10px] font-semibold text-zinc-400">{camera.name}{camera.location ? ` — ${camera.location}` : ""}</span>
         <div className="flex items-center gap-2">
+          <span className={`text-[8px] font-semibold ${aiClass}`}>{aiLabel}</span>
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!isDeleting) onDelete(); }}
@@ -73,7 +99,21 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
           {badges.map((b, i) => (
             <Badge key={i} variant={b.variant}>{b.label}</Badge>
           ))}
-          {badges.length === 0 && status === "live" && <Badge variant="success">All clear</Badge>}
+          {badges.length === 0 && status === "live" && (
+            <Badge variant={inferenceStatus === "running" ? "success" : inferenceStatus === "error" ? "danger" : "muted"}>
+              {inferenceStatus === "running"
+                ? "Inference running"
+                : inferenceStatus === "loading"
+                  ? "Models loading"
+                  : inferenceStatus === "disabled"
+                    ? "Inference disabled"
+                    : inferenceStatus === "stale"
+                      ? "Inference stale"
+                      : inferenceStatus === "error"
+                        ? "Inference error"
+                        : "Inference unknown"}
+            </Badge>
+          )}
         </div>
       </div>
     </div>

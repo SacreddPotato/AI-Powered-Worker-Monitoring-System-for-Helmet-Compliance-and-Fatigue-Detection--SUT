@@ -25,6 +25,7 @@ export const api = {
   updateCamera: (id, data) => request(`/cameras/${id}/`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCamera: (id) => request(`/cameras/${id}/`, { method: "DELETE" }),
   cameraStatus: (id) => request(`/cameras/${id}/status/`),
+  cameraInferenceStatus: (id) => request(`/cameras/${id}/inference/`),
   discoverDevices: () => request("/cameras/discover/"),
   probeSource: async (source_url) => {
     const controller = new AbortController();
@@ -96,6 +97,17 @@ export const api = {
     const query = new URLSearchParams({ group_by: groupBy, ...params }).toString();
     return request(`/alerts/export/chart-data/?${query}`);
   },
+  getAlertSeverityMatrix: () => request("/alerts/severity/matrix/"),
+  updateCameraAlertSeverity: (camId, modelKey, severity) =>
+    request(`/alerts/severity/cameras/${camId}/${modelKey}/`, {
+      method: "PUT",
+      body: JSON.stringify({ severity }),
+    }),
+  applyGlobalAlertSeverity: (severities) =>
+    request("/alerts/severity/apply-global/", {
+      method: "POST",
+      body: JSON.stringify({ severities }),
+    }),
 
   // Detections
   analyze: (cameraId) => request("/detections/analyze/", { method: "POST", body: JSON.stringify({ camera_id: cameraId }) }),

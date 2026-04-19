@@ -4,7 +4,7 @@ import Toggle from "../components/Toggle";
 import useCameraStream from "../hooks/useCameraStream";
 
 const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
-const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
+const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles", "boots", "faceshield", "safetysuit"];
 
 export default function DevLabPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -83,6 +83,9 @@ const ANNO_COLORS = {
   vest: "rgb(50,160,255)",
   gloves: "rgb(255,220,0)",
   goggles: "rgb(0,200,220)",
+  boots: "rgb(255,220,0)",
+  faceshield: "rgb(0,200,220)",
+  safetysuit: "rgb(50,160,255)",
   red: "rgb(255,60,0)",
   green: "rgb(80,200,0)",
   blue: "rgb(50,160,255)",

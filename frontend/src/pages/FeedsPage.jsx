@@ -13,6 +13,7 @@ function isHuggingFaceHost() {
 export default function FeedsPage() {
   const [cameras, setCameras] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [inferenceByCamera, setInferenceByCamera] = useState({});
   const [heroId, setHeroId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [deletingIds, setDeletingIds] = useState([]);
@@ -27,6 +28,25 @@ export default function FeedsPage() {
       const list = data.results || data;
       setCameras(list);
       if (list.length > 0 && !heroId) setHeroId(list[0].id);
+      return list;
+    });
+  }
+
+  function refreshInferenceStatus(cameraList) {
+    if (hostedOnHuggingFace || !cameraList?.length) {
+      setInferenceByCamera({});
+      return Promise.resolve();
+    }
+
+    return Promise.all(
+      cameraList.map((cam) =>
+        api
+          .cameraInferenceStatus(cam.id)
+          .then((status) => [cam.id, status])
+          .catch(() => [cam.id, { camera_id: cam.id, status: "error" }])
+      )
+    ).then((entries) => {
+      setInferenceByCamera(Object.fromEntries(entries));
     });
   }
 
@@ -34,7 +54,7 @@ export default function FeedsPage() {
     let active = true;
     setPageLoading(true);
     Promise.all([
-      loadCameras(),
+      loadCameras().then((list) => refreshInferenceStatus(list)),
       api.listAlerts({ status: "open", limit: 20 }).then((data) => {
         if (!active) return;
         setAlerts(data.results || data);
@@ -53,6 +73,17 @@ export default function FeedsPage() {
       clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    if (hostedOnHuggingFace || cameras.length === 0) {
+      setInferenceByCamera({});
+      return;
+    }
+    const interval = setInterval(() => {
+      refreshInferenceStatus(cameras);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hostedOnHuggingFace, cameras]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
@@ -99,6 +130,7 @@ export default function FeedsPage() {
 
   const grouped = { high: [], medium: [], low: [] };
   alerts.forEach((a) => (grouped[a.severity] || grouped.low).push(a));
+  const runningInferenceCount = cameras.filter((c) => inferenceByCamera[c.id]?.status === "running").length;
 
   return (
     <>
@@ -116,8 +148,22 @@ export default function FeedsPage() {
             Add Camera
           </button>
           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-full px-3 py-1">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_6px_rgba(34,197,94,.5)]" />
-            {cameras.length > 0 ? "Systems online" : "No cameras"}
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                cameras.length === 0
+                  ? "bg-zinc-500"
+                  : hostedOnHuggingFace
+                    ? "bg-amber-500"
+                    : runningInferenceCount > 0
+                      ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,.5)]"
+                      : "bg-amber-500 animate-pulse"
+              }`}
+            />
+            {cameras.length === 0
+              ? "No cameras"
+              : hostedOnHuggingFace
+                ? "Demo mode"
+                : `AI ${runningInferenceCount}/${cameras.length} running`}
           </div>
         </div>
       </div>
@@ -187,6 +233,7 @@ export default function FeedsPage() {
                 <CameraFeed
                   camera={hero}
                   isHero
+                  inference={inferenceByCamera[hero.id]}
                   streamDisabled={hostedOnHuggingFace}
                   badges={getBadges(alerts, hero.id, nowMs)}
                   isDeleting={deletingIds.includes(hero.id)}
@@ -197,6 +244,7 @@ export default function FeedsPage() {
                 <CameraFeed
                   key={cam.id}
                   camera={cam}
+                  inference={inferenceByCamera[cam.id]}
                   streamDisabled={hostedOnHuggingFace}
                   onClick={() => setHeroId(cam.id)}
                   badges={getBadges(alerts, cam.id, nowMs)}
@@ -478,6 +526,9 @@ function modelTypeLabel(key) {
     vest: "Vest",
     gloves: "Gloves",
     goggles: "Goggles",
+    boots: "Boots",
+    faceshield: "Face Shield",
+    safetysuit: "Safety Suit",
   };
   return labels[key] || String(key || "Alert").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

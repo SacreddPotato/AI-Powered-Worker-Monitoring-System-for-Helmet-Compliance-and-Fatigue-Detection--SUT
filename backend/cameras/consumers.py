@@ -29,13 +29,17 @@ class CameraStreamConsumer(WebsocketConsumer):
         self.camera_id = int(self.scope["url_route"]["kwargs"]["camera_id"])
         self._running = False
         self._thread = None
-        self._overlays = None  # None = no annotation; set() = specific models
+        self._overlays = None  # None = all overlays; set() = specific models
         self.accept()
-        # Start streaming immediately with no overlays
+        from .inference_status import mark_loading
+        mark_loading(self.camera_id)
+        # Start streaming immediately
         self._start_stream()
 
     def disconnect(self, close_code):
         self._running = False
+        from .inference_status import mark_stream_stopped
+        mark_stream_stopped(self.camera_id)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
 
@@ -104,8 +108,8 @@ class CameraStreamConsumer(WebsocketConsumer):
                         continue
                     consecutive_failures = 0
 
-                    # Run annotation if overlays are configured
-                    if self._overlays is not None and annotator is not None:
+                    # Always run annotator if available. Overlay selection is handled inside draw_annotations.
+                    if annotator is not None:
                         try:
                             frame = annotator(frame)
                         except Exception:
@@ -149,6 +153,7 @@ class CameraStreamConsumer(WebsocketConsumer):
         from alerts.services import create_alert_from_inference
         from annotation import draw_annotations
         from .models import Camera
+        from .inference_status import mark_loading, mark_disabled, mark_running, mark_error
 
         svc = get_inference_service()
         camera = Camera.objects.filter(pk=self.camera_id).first()
@@ -158,9 +163,12 @@ class CameraStreamConsumer(WebsocketConsumer):
         cached = {}
         counter = [0]
         INFERENCE_INTERVAL = 5
+        heartbeat_counter = [0]
+        LOG_EVERY_N_INFERENCE_CYCLES = 12
 
         def annotate(frame):
             if not svc.ready:
+                mark_loading(self.camera_id)
                 return frame
             counter[0] += 1
             try:
@@ -168,6 +176,7 @@ class CameraStreamConsumer(WebsocketConsumer):
                     enabled = get_effective_enabled_model_keys(self.camera_id)
                     if not enabled:
                         cached.clear()
+                        mark_disabled(self.camera_id)
                         return frame
                     new = {}
                     for key in enabled:
@@ -175,10 +184,23 @@ class CameraStreamConsumer(WebsocketConsumer):
                     if camera is not None:
                         for key, result in new.items():
                             create_alert_from_inference(camera=camera, model_key=key, result=result)
+                    detected_count = sum(1 for item in new.values() if bool(item.get("detected")))
+                    mark_running(self.camera_id, model_keys=enabled, detected_count=detected_count)
+                    heartbeat_counter[0] += 1
+                    if heartbeat_counter[0] % LOG_EVERY_N_INFERENCE_CYCLES == 0:
+                        logger.info(
+                            "Inference heartbeat camera=%s models=%s detections=%s overlays=%s",
+                            self.camera_id,
+                            sorted(enabled),
+                            detected_count,
+                            sorted(self._overlays) if self._overlays else "all",
+                        )
                     cached.clear()
                     cached.update(new)
                 return draw_annotations(frame, cached, enabled_overlays=self._overlays)
             except Exception:
+                mark_error(self.camera_id, "inference_exception")
+                logger.exception("Inference exception on camera %s", self.camera_id)
                 return frame
 
         return annotate

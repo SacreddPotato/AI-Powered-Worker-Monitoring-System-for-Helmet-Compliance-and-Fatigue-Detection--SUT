@@ -116,7 +116,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-100 flex items-center justify-between px-6 md:px-12 py-4 bg-[#09090b]/80 backdrop-blur-lg border-b border-zinc-800/50">
         <div className="flex items-center gap-2 text-zinc-100 font-extrabold text-lg tracking-wide">
           <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)]" />
-          SafeVision
+          SafeVision AI
         </div>
         <div className="flex items-center gap-7">
           <a href="#features" className="hidden md:inline text-[13px] font-medium text-zinc-400 hover:text-zinc-100 transition-colors">Features</a>
@@ -295,7 +295,7 @@ export default function LandingPage() {
           See It in Action
         </h2>
         <p className="text-base text-zinc-500 max-w-[560px] leading-relaxed mb-12">
-          Real screenshots from the SafeVision monitoring dashboard.
+          Real screenshots from the SafeVision AI monitoring dashboard.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -344,7 +344,7 @@ export default function LandingPage() {
       <footer className="border-t border-[#1a1a1e]">
         <div className="py-12 px-6 md:px-12 max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-zinc-100 text-[15px]">SafeVision</span>
+            <span className="font-extrabold text-zinc-100 text-[15px]">SafeVision AI</span>
             <span className="text-zinc-600 text-xs ml-3">&copy; 2026 &middot; AI-Powered Worker Safety</span>
           </div>
           <div className="flex items-center gap-5">

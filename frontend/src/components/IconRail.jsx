@@ -35,8 +35,12 @@ const navItems = [
 export default function IconRail({ alertCount = 0, currentPath = "", onNavigateStart }) {
   return (
     <nav className="w-14 bg-[#0c0c0f] border-r border-zinc-800/60 flex flex-col items-center py-3 gap-1.5 shrink-0">
-      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-500 rounded-lg flex items-center justify-center mb-4">
-        <span className="text-white text-sm font-bold">S</span>
+      <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-800 mb-4 bg-zinc-900">
+        <img
+          src="/images/assets/logo.jpg"
+          alt="SafeVision AI"
+          className="w-full h-full object-cover"
+        />
       </div>
       {navItems.map(({ to, icon, label }) => (
         <NavLink
