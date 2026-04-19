@@ -1,8 +1,8 @@
 import Badge from "./Badge";
 import useCameraStream from "../hooks/useCameraStream";
 
-export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [], isDeleting = false }) {
-  const { src, status } = useCameraStream(camera.id, overlays);
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [], isDeleting = false, streamDisabled = false }) {
+  const { src, status } = useCameraStream(streamDisabled ? null : camera.id, overlays);
 
   return (
     <div
@@ -25,7 +25,7 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
             <circle cx="12" cy="13" r="4" />
           </svg>
           <span className="text-[10px] text-zinc-600">
-            {status === "connecting" ? "Connecting..." : "No signal"}
+            {streamDisabled ? "Unavailable on Hugging Face demo" : status === "connecting" ? "Connecting..." : "No signal"}
           </span>
         </div>
       )}
@@ -59,9 +59,9 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
             </button>
           )}
           <div className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-red-500 animate-pulse-dot" : status === "connecting" ? "bg-amber-500 animate-pulse" : "bg-zinc-600"}`} />
-            <span className={`text-[8px] font-semibold ${status === "live" ? "text-red-500" : status === "connecting" ? "text-amber-500" : "text-zinc-600"}`}>
-              {status === "live" ? "LIVE" : status === "connecting" ? "..." : "OFFLINE"}
+            <span className={`w-1.5 h-1.5 rounded-full ${streamDisabled ? "bg-amber-500" : status === "live" ? "bg-red-500 animate-pulse-dot" : status === "connecting" ? "bg-amber-500 animate-pulse" : "bg-zinc-600"}`} />
+            <span className={`text-[8px] font-semibold ${streamDisabled ? "text-amber-400" : status === "live" ? "text-red-500" : status === "connecting" ? "text-amber-500" : "text-zinc-600"}`}>
+              {streamDisabled ? "DEMO" : status === "live" ? "LIVE" : status === "connecting" ? "..." : "OFFLINE"}
             </span>
           </div>
         </div>

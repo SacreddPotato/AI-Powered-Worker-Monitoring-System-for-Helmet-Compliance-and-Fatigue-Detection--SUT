@@ -6,6 +6,12 @@ import Toggle from "../components/Toggle";
 
 const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
 
+function isHuggingFaceHost() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  return host === "huggingface.co" || host.endsWith(".huggingface.co") || host === "hf.space" || host.endsWith(".hf.space");
+}
+
 export default function FeedsPage() {
   const [cameras, setCameras] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -13,6 +19,7 @@ export default function FeedsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [deletingIds, setDeletingIds] = useState([]);
+  const hostedOnHuggingFace = isHuggingFaceHost();
 
   function loadCameras() {
     api.listCameras().then((data) => {
@@ -113,6 +120,13 @@ export default function FeedsPage() {
         </div>
       )}
 
+      {hostedOnHuggingFace && (
+        <div className="mx-5 mt-3 mb-1 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2.5">
+          <p className="text-[11px] text-amber-300 font-medium">Camera streaming is unavailable on Hugging Face-hosted demos.</p>
+          <p className="text-[10px] text-amber-200/80 mt-0.5">To use live camera feeds, run this project locally and open the local URL.</p>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
         {/* Camera grid */}
         <div className="flex-1 p-3 overflow-auto">
@@ -139,6 +153,7 @@ export default function FeedsPage() {
                   camera={hero}
                   isHero
                   overlays={overlays}
+                  streamDisabled={hostedOnHuggingFace}
                   badges={getBadges(alerts, hero.id)}
                   isDeleting={deletingIds.includes(hero.id)}
                   onDelete={() => handleDeleteCamera(hero.id)}
@@ -149,6 +164,7 @@ export default function FeedsPage() {
                   key={cam.id}
                   camera={cam}
                   overlays={overlays}
+                  streamDisabled={hostedOnHuggingFace}
                   onClick={() => setHeroId(cam.id)}
                   badges={getBadges(alerts, cam.id)}
                   isDeleting={deletingIds.includes(cam.id)}
