@@ -2,9 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import CameraFeed from "../components/CameraFeed";
 import AlertCard from "../components/AlertCard";
-import Toggle from "../components/Toggle";
-
-const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles"];
+import LoadingCircle from "../components/LoadingCircle";
 
 function isHuggingFaceHost() {
   if (typeof window === "undefined") return false;
@@ -17,12 +15,15 @@ export default function FeedsPage() {
   const [alerts, setAlerts] = useState([]);
   const [heroId, setHeroId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [deletingIds, setDeletingIds] = useState([]);
+  const [hfNoticeDismissed, setHfNoticeDismissed] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const [pageLoading, setPageLoading] = useState(true);
   const hostedOnHuggingFace = isHuggingFaceHost();
+  const showFullscreenHfNotice = hostedOnHuggingFace && !hfNoticeDismissed;
 
   function loadCameras() {
-    api.listCameras().then((data) => {
+    return api.listCameras().then((data) => {
       const list = data.results || data;
       setCameras(list);
       if (list.length > 0 && !heroId) setHeroId(list[0].id);
@@ -30,13 +31,31 @@ export default function FeedsPage() {
   }
 
   useEffect(() => {
-    loadCameras();
-    api.listAlerts({ status: "open", limit: 20 }).then((data) => {
-      setAlerts(data.results || data);
+    let active = true;
+    setPageLoading(true);
+    Promise.all([
+      loadCameras(),
+      api.listAlerts({ status: "open", limit: 20 }).then((data) => {
+        if (!active) return;
+        setAlerts(data.results || data);
+      }),
+    ]).finally(() => {
+      if (active) setPageLoading(false);
     });
     const interval = setInterval(() => {
-      api.listAlerts({ status: "open", limit: 20 }).then((data) => setAlerts(data.results || data));
+      api.listAlerts({ status: "open", limit: 20 }).then((data) => {
+        if (!active) return;
+        setAlerts(data.results || data);
+      });
     }, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -75,10 +94,6 @@ export default function FeedsPage() {
     }
   }
 
-  function toggleOverlay(key) {
-    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
-  }
-
   const hero = cameras.find((c) => c.id === heroId);
   const others = cameras.filter((c) => c.id !== heroId);
 
@@ -107,27 +122,47 @@ export default function FeedsPage() {
         </div>
       </div>
 
-      {/* Overlay toggle bar */}
-      {cameras.length > 0 && (
-        <div className="px-5 py-2 border-b border-zinc-800/60 flex items-center gap-4 shrink-0">
-          <span className="text-[9px] text-zinc-600 uppercase tracking-wider">Overlays</span>
-          {ALL_MODELS.map((key) => (
-            <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-              <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
-              <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
-            </label>
-          ))}
-        </div>
-      )}
-
-      {hostedOnHuggingFace && (
+      {hostedOnHuggingFace && hfNoticeDismissed && (
         <div className="mx-5 mt-3 mb-1 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2.5">
           <p className="text-[11px] text-amber-300 font-medium">Camera streaming is unavailable on Hugging Face-hosted demos.</p>
           <p className="text-[10px] text-amber-200/80 mt-0.5">To use live camera feeds, run this project locally and open the local URL.</p>
         </div>
       )}
 
-      <div className="flex-1 flex overflow-hidden">
+      {showFullscreenHfNotice && (
+        <div className="flex-1 px-5 py-5">
+          <div className="h-full border border-amber-500/30 bg-amber-500/10 rounded-xl flex flex-col items-center justify-center text-center px-6">
+            <div className="w-11 h-11 rounded-full border border-amber-400/40 bg-amber-500/15 flex items-center justify-center text-amber-300 mb-4">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <h2 className="text-base font-semibold text-amber-200 mb-2">Camera feeds are unavailable on this Hugging Face demo URL</h2>
+            <p className="text-[11px] text-amber-100/85 max-w-xl leading-relaxed mb-5">
+              Browser and host restrictions prevent direct camera access and reliable live stream transport in this hosted environment.
+              Run the project locally to use real camera feeds.
+            </p>
+            <button
+              onClick={() => setHfNoticeDismissed(true)}
+              className="text-[10px] font-semibold text-amber-200 bg-amber-500/15 border border-amber-400/40 rounded-lg px-4 py-2 hover:bg-amber-500/20 transition-colors"
+            >
+              Dismiss and continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showFullscreenHfNotice && pageLoading && (
+        <div className="flex-1 px-5 py-5">
+          <div className="h-full border border-zinc-800 rounded-xl bg-surface-alt/50">
+            <LoadingCircle label="Loading feeds..." />
+          </div>
+        </div>
+      )}
+
+      {!showFullscreenHfNotice && !pageLoading && <div className="flex-1 flex overflow-hidden">
         {/* Camera grid */}
         <div className="flex-1 p-3 overflow-auto">
           {cameras.length === 0 ? (
@@ -152,9 +187,8 @@ export default function FeedsPage() {
                 <CameraFeed
                   camera={hero}
                   isHero
-                  overlays={overlays}
                   streamDisabled={hostedOnHuggingFace}
-                  badges={getBadges(alerts, hero.id)}
+                  badges={getBadges(alerts, hero.id, nowMs)}
                   isDeleting={deletingIds.includes(hero.id)}
                   onDelete={() => handleDeleteCamera(hero.id)}
                 />
@@ -163,10 +197,9 @@ export default function FeedsPage() {
                 <CameraFeed
                   key={cam.id}
                   camera={cam}
-                  overlays={overlays}
                   streamDisabled={hostedOnHuggingFace}
                   onClick={() => setHeroId(cam.id)}
-                  badges={getBadges(alerts, cam.id)}
+                  badges={getBadges(alerts, cam.id, nowMs)}
                   isDeleting={deletingIds.includes(cam.id)}
                   onDelete={() => handleDeleteCamera(cam.id)}
                 />
@@ -202,7 +235,7 @@ export default function FeedsPage() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {showAdd && <AddCameraDialog onClose={() => setShowAdd(false)} onSubmit={handleAddCamera} />}
     </>
@@ -414,11 +447,37 @@ function FormField({ label, placeholder, value, onChange, required }) {
   );
 }
 
-function getBadges(alerts, cameraId) {
-  return alerts
-    .filter((a) => a.camera === cameraId)
-    .map((a) => ({
-      variant: a.severity === "high" ? "danger" : a.severity === "medium" ? "warning" : "info",
-      label: a.message,
-    }));
+function getBadges(alerts, cameraId, nowMs) {
+  const byType = {};
+
+  alerts
+    .filter((alert) => alert.camera === cameraId)
+    .forEach((alert) => {
+      const existing = byType[alert.model_key];
+      const createdTs = Date.parse(alert.created_at || "") || 0;
+      const existingTs = existing ? existing._createdTs : -1;
+      if (!existing || createdTs > existingTs) {
+        byType[alert.model_key] = { ...alert, _createdTs: createdTs };
+      }
+    });
+
+  return Object.values(byType).map((alert) => {
+    const elapsedSeconds = Math.max(0, Math.floor((nowMs - alert._createdTs) / 1000));
+    const typeLabel = modelTypeLabel(alert.model_key);
+    return {
+      variant: alert.severity === "high" ? "danger" : alert.severity === "medium" ? "warning" : "info",
+      label: `${typeLabel} · ${elapsedSeconds}s`,
+    };
+  });
+}
+
+function modelTypeLabel(key) {
+  const labels = {
+    helmet: "Helmet",
+    fatigue: "Fatigue",
+    vest: "Vest",
+    gloves: "Gloves",
+    goggles: "Goggles",
+  };
+  return labels[key] || String(key || "Alert").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }

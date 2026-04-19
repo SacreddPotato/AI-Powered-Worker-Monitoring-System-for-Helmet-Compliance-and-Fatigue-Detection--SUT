@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import IconRail from "../components/IconRail";
 import Toast from "../components/Toast";
+import LoadingCircle from "../components/LoadingCircle";
 import { createAlertSocket } from "../ws";
 import { api } from "../api";
 
 export default function DashboardLayout() {
   const [toasts, setToasts] = useState([]);
   const [alertCount, setAlertCount] = useState(0);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [pendingPath, setPendingPath] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     api.listAlerts({ status: "open", limit: 1 }).then((data) => {
@@ -32,11 +36,31 @@ export default function DashboardLayout() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const handleNavigateStart = useCallback((nextPath) => {
+    if (!nextPath || nextPath === location.pathname) return;
+    setPendingPath(nextPath);
+    setRouteLoading(true);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!routeLoading || !pendingPath || location.pathname !== pendingPath) return;
+    const t = setTimeout(() => {
+      setRouteLoading(false);
+      setPendingPath(null);
+    }, 220);
+    return () => clearTimeout(t);
+  }, [routeLoading, pendingPath, location.pathname]);
+
   return (
     <div className="h-screen flex overflow-hidden">
-      <IconRail alertCount={alertCount} />
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <IconRail alertCount={alertCount} currentPath={location.pathname} onNavigateStart={handleNavigateStart} />
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         <Outlet />
+        {routeLoading && (
+          <div className="absolute inset-0 bg-[#09090b]/65 backdrop-blur-[1px] z-40">
+            <LoadingCircle label="Loading screen..." />
+          </div>
+        )}
       </main>
       <Toast alerts={toasts} onDismiss={dismissToast} />
     </div>

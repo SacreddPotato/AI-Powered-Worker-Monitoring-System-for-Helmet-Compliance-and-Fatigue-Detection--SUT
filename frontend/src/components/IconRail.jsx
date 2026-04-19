@@ -32,7 +32,7 @@ const navItems = [
   { to: "/devlab", icon: "devlab", label: "Dev Lab" },
 ];
 
-export default function IconRail({ alertCount = 0 }) {
+export default function IconRail({ alertCount = 0, currentPath = "", onNavigateStart }) {
   return (
     <nav className="w-14 bg-[#0c0c0f] border-r border-zinc-800/60 flex flex-col items-center py-3 gap-1.5 shrink-0">
       <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-500 rounded-lg flex items-center justify-center mb-4">
@@ -42,6 +42,9 @@ export default function IconRail({ alertCount = 0 }) {
         <NavLink
           key={to}
           to={to}
+          onClick={() => {
+            if (to !== currentPath) onNavigateStart?.(to);
+          }}
           className={({ isActive }) =>
             `w-9 h-9 rounded-lg flex items-center justify-center relative transition-colors ${
               isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]"

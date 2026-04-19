@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
+import LoadingCircle from "../components/LoadingCircle";
 
 export default function ModelsPage() {
   const [models, setModels] = useState([]);
@@ -41,7 +42,8 @@ export default function ModelsPage() {
     setModels(data.results || data);
   }
 
-  async function toggleCameraModel(camId, modelKey, current) {
+  async function toggleCameraModel(camId, modelKey, current, globallyEnabled) {
+    if (!globallyEnabled) return;
     await api.updateCameraModel(camId, modelKey, { enabled: !current });
     const ov = await api.listCameraModels(camId);
     setOverrides((prev) => ({ ...prev, [camId]: ov }));
@@ -67,6 +69,12 @@ export default function ModelsPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5">
+        {loading ? (
+          <div className="h-full border border-zinc-800 rounded-xl bg-surface-alt/50">
+            <LoadingCircle label="Loading model settings..." />
+          </div>
+        ) : (
+          <>
         <h2 className="text-sm font-semibold text-zinc-50 mb-1">Global Model Settings</h2>
         <p className="text-[10px] text-zinc-600 mb-4">Toggle models on/off globally. Per-camera overrides below.</p>
 
@@ -117,12 +125,25 @@ export default function ModelsPage() {
                   </td>
                   {models.map((m) => (
                     <td key={m.key} className="text-center px-3 py-2 border-b border-zinc-800/50">
-                      <div className="flex justify-center">
-                        <Toggle
-                          size="sm"
-                          enabled={getOverride(cam.id, m.key)}
-                          onChange={() => toggleCameraModel(cam.id, m.key, getOverride(cam.id, m.key))}
-                        />
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        {(() => {
+                          const cameraOverrideEnabled = getOverride(cam.id, m.key);
+                          const effectiveEnabled = m.is_enabled && cameraOverrideEnabled;
+                          return (
+                            <>
+                              <Toggle
+                                size="sm"
+                                enabled={effectiveEnabled}
+                                disabled={!m.is_enabled}
+                                onChange={() => toggleCameraModel(cam.id, m.key, cameraOverrideEnabled, m.is_enabled)}
+                                title={!m.is_enabled ? "Enable this model globally to change camera-level override" : ""}
+                              />
+                              {!m.is_enabled && (
+                                <span className="text-[8px] leading-none text-zinc-500">Locked by global setting</span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                   ))}
@@ -131,6 +152,8 @@ export default function ModelsPage() {
             </tbody>
           </table>
         </div>
+          </>
+        )}
       </div>
     </>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
+import LoadingCircle from "../components/LoadingCircle";
 
 const GROUP_MODES = ["severity", "camera", "model", "time"];
 const DATE_RANGE_MODES = ["today", "week", "month", "custom"];
@@ -23,12 +24,14 @@ export default function AlertsPage() {
   const [selected, setSelected] = useState(null);
   const [chartData, setChartData] = useState({ labels: [], values: [], total: 0 });
   const [chartLoading, setChartLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [excelExporting, setExcelExporting] = useState(false);
   const [chartExporting, setChartExporting] = useState(false);
 
   useEffect(() => {
+    setInitialLoading(true);
     loadAlerts();
-    const interval = setInterval(loadAlerts, 5000);
+    const interval = setInterval(() => loadAlerts({ silent: true }), 5000);
     return () => clearInterval(interval);
   }, [dateRange, customStart, customEnd]);
 
@@ -72,19 +75,27 @@ export default function AlertsPage() {
     setCustomEnd(toDateInputValue(end));
   }
 
-  function loadAlerts() {
+  function loadAlerts({ silent = false } = {}) {
     const dateParams = buildDateParams();
     if (!dateParams) {
       setAlerts([]);
+      if (!silent) setInitialLoading(false);
       return;
     }
-    api.listAlerts({ limit: 500, ...dateParams }).then((data) => {
-      const list = data.results || data;
-      setAlerts(list);
-      if (selected && !list.some((a) => a.id === selected.id)) {
-        setSelected(null);
-      }
-    });
+    api.listAlerts({ limit: 500, ...dateParams })
+      .then((data) => {
+        const list = data.results || data;
+        setAlerts(list);
+        if (selected && !list.some((a) => a.id === selected.id)) {
+          setSelected(null);
+        }
+      })
+      .catch(() => {
+        if (!silent) setAlerts([]);
+      })
+      .finally(() => {
+        if (!silent) setInitialLoading(false);
+      });
   }
 
   async function loadChart(mode) {
@@ -255,6 +266,13 @@ export default function AlertsPage() {
         </div>
       )}
 
+      {initialLoading ? (
+        <div className="flex-1 px-5 py-5">
+          <div className="h-full border border-zinc-800 rounded-xl bg-surface-alt/50">
+            <LoadingCircle label="Loading alerts..." />
+          </div>
+        </div>
+      ) : (
       <div className="flex-1 flex overflow-hidden">
         {/* Alert list */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
@@ -357,6 +375,7 @@ export default function AlertsPage() {
           </div>
         )}
       </div>
+      )}
     </>
   );
 }

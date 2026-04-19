@@ -66,16 +66,13 @@ def video_stream(request, video_id):
 
     def generate():
         from annotation import draw_annotations
-        from detection.models import ModelSetting
+        from detection.services import get_globally_enabled_model_keys
 
         cap = cv2.VideoCapture(video.file_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
         frame_delay = 1.0 / min(fps, 30)
 
         overlay_set = set(filter(None, overlays.split(','))) if overlays else None
-        enabled = set(
-            ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True)
-        ) if annotated else set()
 
         # Kick off model loading in background so raw frames stream immediately
         svc = get_inference_service() if annotated else None
@@ -83,6 +80,7 @@ def video_stream(request, video_id):
             threading.Thread(target=svc.preload, daemon=True).start()
 
         cached = {}
+        enabled = set()
         frame_idx = 0
         INFER_EVERY = 3
 
@@ -95,15 +93,20 @@ def video_stream(request, video_id):
 
             display = frame
 
-            if annotated and svc and svc.ready and enabled:
+            if annotated and svc and svc.ready:
                 try:
                     if frame_idx % INFER_EVERY == 0 or not cached:
-                        new = {}
-                        for key in enabled:
-                            new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
-                        cached.clear()
-                        cached.update(new)
-                    display = draw_annotations(frame, cached, enabled_overlays=overlay_set)
+                        enabled = get_globally_enabled_model_keys()
+                        if enabled:
+                            new = {}
+                            for key in enabled:
+                                new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
+                            cached.clear()
+                            cached.update(new)
+                        else:
+                            cached.clear()
+                    if enabled and cached:
+                        display = draw_annotations(frame, cached, enabled_overlays=overlay_set)
                 except Exception:
                     pass
 
@@ -145,8 +148,8 @@ def video_analyze(request, video_id):
         if not ret:
             break
         if frame_idx % sample_every == 0:
-            from detection.models import ModelSetting
-            enabled = ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True)
+            from detection.services import get_globally_enabled_model_keys
+            enabled = get_globally_enabled_model_keys()
             frame_results = {}
             for key in enabled:
                 result = svc.run_inference_on_frame(key, frame, camera_id=0)

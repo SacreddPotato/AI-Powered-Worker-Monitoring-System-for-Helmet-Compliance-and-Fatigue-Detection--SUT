@@ -13,21 +13,12 @@ def _make_annotator(camera_id, overlays_csv):
     """Return a function(frame)->frame that runs inference and draws
     annotations.  Results are cached and re-run every INFERENCE_INTERVAL
     frames.  Returns None while models are still loading (non-blocking)."""
-    from detection.services import get_inference_service
-    from detection.models import ModelSetting, CameraModel
+    from detection.services import get_inference_service, get_effective_enabled_model_keys
     from cameras.models import Camera
     from alerts.services import create_alert_from_inference
     from annotation import draw_annotations
 
     overlay_set = set(filter(None, overlays_csv.split(','))) if overlays_csv else None
-
-    # Resolve enabled models for this camera
-    enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
-    for ov in CameraModel.objects.filter(camera_id=camera_id):
-        if ov.is_enabled:
-            enabled.add(ov.model_setting_id)
-        else:
-            enabled.discard(ov.model_setting_id)
 
     svc = get_inference_service()
     camera = Camera.objects.filter(pk=camera_id).first()
@@ -48,6 +39,10 @@ def _make_annotator(camera_id, overlays_csv):
         counter[0] += 1
         try:
             if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
+                enabled = get_effective_enabled_model_keys(camera_id)
+                if not enabled:
+                    cached.clear()
+                    return frame
                 new = {}
                 for key in enabled:
                     new[key] = svc.run_inference_on_frame(key, frame, camera_id=camera_id)

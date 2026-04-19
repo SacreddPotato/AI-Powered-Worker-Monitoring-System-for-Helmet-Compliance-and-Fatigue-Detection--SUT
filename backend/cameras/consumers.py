@@ -145,19 +145,10 @@ class CameraStreamConsumer(WebsocketConsumer):
     def _make_annotator(self):
         """Build the annotation closure (same logic as views._make_annotator
         but driven by self._overlays which can change at runtime)."""
-        from detection.services import get_inference_service
-        from detection.models import ModelSetting, CameraModel
+        from detection.services import get_inference_service, get_effective_enabled_model_keys
         from alerts.services import create_alert_from_inference
         from annotation import draw_annotations
         from .models import Camera
-
-        # Resolve enabled models for this camera
-        enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
-        for ov in CameraModel.objects.filter(camera_id=self.camera_id):
-            if ov.is_enabled:
-                enabled.add(ov.model_setting_id)
-            else:
-                enabled.discard(ov.model_setting_id)
 
         svc = get_inference_service()
         camera = Camera.objects.filter(pk=self.camera_id).first()
@@ -174,6 +165,10 @@ class CameraStreamConsumer(WebsocketConsumer):
             counter[0] += 1
             try:
                 if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
+                    enabled = get_effective_enabled_model_keys(self.camera_id)
+                    if not enabled:
+                        cached.clear()
+                        return frame
                     new = {}
                     for key in enabled:
                         new[key] = svc.run_inference_on_frame(key, frame, camera_id=self.camera_id)
