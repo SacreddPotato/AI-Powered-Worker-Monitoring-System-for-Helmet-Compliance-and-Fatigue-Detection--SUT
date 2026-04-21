@@ -31,6 +31,18 @@ _LEFT_EYE_LANDMARKS = [33, 133, 159, 145, 153, 144, 163, 7]
 _RIGHT_EYE_LANDMARKS = [362, 263, 386, 374, 380, 381, 382, 398]
 _FEATURE_MISSING_CONFIDENCE = 0.7
 _PERSON_FALLBACK_MISSING_CONFIDENCE = 0.72
+_FOOT_LANDMARK_VISIBILITY_THRESHOLD = 0.35
+_FOOTWEAR_LABEL_HINTS = {
+    "boot",
+    "shoe",
+    "sneaker",
+    "loafer",
+    "sandal",
+    "slipper",
+    "clog",
+    "trainer",
+    "footwear",
+}
 
 
 def decode_base64_image(image_base64: str):
@@ -91,7 +103,7 @@ class PPEModelAdapter:
         }
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
         self.supports_qr = model_key == "vest"
-        self._absence_uses_features = model_key in {"gloves", "goggles"}
+        self._absence_uses_features = model_key in {"gloves", "goggles", "boots"}
         self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
         self.person_model_path = model_info.get("person_model_path")
 
@@ -102,6 +114,7 @@ class PPEModelAdapter:
         self._supports_explicit_missing_classes = False
         self._mp_hands = None
         self._mp_face_mesh = None
+        self._mp_pose = None
         self._feature_lock = threading.Lock()
         self.model_classes = []
         self.matched_labels = []
@@ -169,6 +182,13 @@ class PPEModelAdapter:
                             min_detection_confidence=0.35,
                             min_tracking_confidence=0.35,
                         )
+                    elif self.model_key == "boots":
+                        self._mp_pose = mp.solutions.pose.Pose(
+                            static_image_mode=False,
+                            model_complexity=1,
+                            min_detection_confidence=0.35,
+                            min_tracking_confidence=0.35,
+                        )
 
             if self._absence_uses_person_overlap:
                 self._load_person_model_for_absence()
@@ -202,6 +222,8 @@ class PPEModelAdapter:
             return self._detect_hand_regions(frame)
         if self.model_key == "goggles":
             return self._detect_eye_regions(frame)
+        if self.model_key == "boots":
+            return self._detect_foot_regions(frame)
         return []
 
     def _detect_hand_regions(self, frame):
@@ -243,6 +265,159 @@ class PPEModelAdapter:
             if right_bbox is not None:
                 out.append(right_bbox)
         return out
+
+    def _detect_foot_regions(self, frame):
+        if self._mp_pose is None:
+            return []
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        with self._feature_lock:
+            res = self._mp_pose.process(frame_rgb)
+
+        if not res.pose_landmarks:
+            return []
+
+        h, w = frame.shape[:2]
+        landmarks = res.pose_landmarks.landmark
+        left_triplet = (
+            mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value,
+            mp.solutions.pose.PoseLandmark.LEFT_HEEL.value,
+            mp.solutions.pose.PoseLandmark.LEFT_FOOT_INDEX.value,
+        )
+        right_triplet = (
+            mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value,
+            mp.solutions.pose.PoseLandmark.RIGHT_HEEL.value,
+            mp.solutions.pose.PoseLandmark.RIGHT_FOOT_INDEX.value,
+        )
+
+        out = []
+        for triplet in (left_triplet, right_triplet):
+            points = []
+            for idx in triplet:
+                lm = landmarks[idx]
+                if getattr(lm, "visibility", 1.0) < _FOOT_LANDMARK_VISIBILITY_THRESHOLD:
+                    continue
+                points.append((lm.x, lm.y))
+            if len(points) < 2:
+                continue
+            bbox = self._points_to_bbox(points, w, h, pad=0.35)
+            if bbox is not None:
+                out.append(bbox)
+        return out
+
+    @staticmethod
+    def _is_footwear_label(label: str) -> bool:
+        normalized = _normalize_label(label)
+        return any(hint in normalized for hint in _FOOTWEAR_LABEL_HINTS)
+
+    def _infer_boot_presence(self, foot_crop):
+        try:
+            region_results = self._model(foot_crop, conf=0.25, verbose=False)
+        except Exception:
+            return False, 0.0, ""
+
+        first = region_results[0]
+        names = first.names or {}
+        probs = getattr(first, "probs", None)
+        if probs is not None:
+            top_index = int(probs.top1)
+            top_confidence = float(probs.top1conf)
+            top_label = _normalize_label(str(names.get(top_index, "")))
+            return self._is_footwear_label(top_label), top_confidence, top_label
+
+        best_confidence = 0.0
+        best_label = ""
+        boxes = getattr(first, "boxes", None)
+        if boxes is None:
+            return False, best_confidence, best_label
+
+        for box in boxes:
+            class_id = int(box.cls[0]) if box.cls is not None else -1
+            class_name = _normalize_label(str(names.get(class_id, "")))
+            confidence = float(box.conf[0]) if box.conf is not None else 0.0
+            if confidence > best_confidence:
+                best_confidence = confidence
+                best_label = class_name
+            if self._is_footwear_label(class_name):
+                return True, confidence, class_name
+        return False, best_confidence, best_label
+
+    def _infer_boots_with_feature_regions(self, frame, camera_id: int = 0) -> Dict:
+        feature_boxes = self._detect_foot_regions(frame)
+
+        annotation_boxes = []
+        present_confidences = []
+        missing_confidences = []
+        count = 0
+
+        for fx1, fy1, fx2, fy2 in feature_boxes:
+            crop = frame[fy1:fy2, fx1:fx2]
+            if crop.size == 0:
+                continue
+
+            has_boots, confidence, raw_label = self._infer_boot_presence(crop)
+            if has_boots:
+                count += 1
+                present_confidences.append(confidence)
+                annotation_boxes.append(
+                    {
+                        "x1": int(fx1),
+                        "y1": int(fy1),
+                        "x2": int(fx2),
+                        "y2": int(fy2),
+                        "label": raw_label or "boots",
+                        "color": "green",
+                    }
+                )
+            else:
+                missing_confidence = max(_FEATURE_MISSING_CONFIDENCE, 1.0 - confidence)
+                missing_confidences.append(missing_confidence)
+                annotation_boxes.append(
+                    {
+                        "x1": int(fx1),
+                        "y1": int(fy1),
+                        "x2": int(fx2),
+                        "y2": int(fy2),
+                        "label": "no boots",
+                        "color": "red",
+                    }
+                )
+
+        missing_count = len([box for box in annotation_boxes if box["color"] == "red"])
+        detected = missing_count > 0
+        confidence = (
+            max(missing_confidences, default=0.0)
+            if detected
+            else max(present_confidences, default=0.0)
+        )
+
+        payload = {
+            "count": count,
+            "missing_count": missing_count,
+            "feature_count": len(feature_boxes),
+            "feature_missing_count": missing_count,
+            "person_count": len(feature_boxes),
+            "person_missing_count": missing_count,
+            "absence_detector": "mediapipe+ultralytics_pretrained",
+            "supports_explicit_missing_classes": False,
+            "used_person_overlap_fallback": False,
+            "ok_count": count,
+            "boxes": annotation_boxes,
+            "classification": (
+                "ppe_missing"
+                if detected
+                else ("ppe_ok" if count > 0 else "no_target_detected")
+            ),
+            "model_classes": self.model_classes,
+            "matched_target_labels": self.matched_labels,
+            "camera_id": camera_id,
+        }
+
+        return {
+            "status": "ok",
+            "detected": detected,
+            "confidence": round(confidence, 4),
+            "payload": payload,
+        }
 
     def _load_person_model_for_absence(self):
         if self._person_model is not None:
@@ -312,6 +487,9 @@ class PPEModelAdapter:
                     "load_error": self.load_error,
                 },
             }
+
+        if self.model_key == "boots":
+            return self._infer_boots_with_feature_regions(frame, camera_id=camera_id)
 
         try:
             results = self._model(frame, conf=0.35, verbose=False)

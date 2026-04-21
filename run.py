@@ -23,7 +23,7 @@ def _ensure_lfs_models_available() -> bool:
         sys.path.insert(0, BACKEND_DIR)
 
     try:
-        from config import ensure_ml_models_layout, get_missing_model_files
+        from backend.config import ensure_ml_models_layout, get_missing_model_files
     except Exception as exc:
         print(f"[run] Failed to inspect model assets: {exc}")
         return False
