@@ -1,7 +1,9 @@
 import base64
+import bz2
 import os
 import re
 import threading
+import urllib.request
 from io import BytesIO
 from typing import Dict, List
 
@@ -54,6 +56,32 @@ def decode_base64_image(image_base64: str):
     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
 
+def _download_any(download_urls: List[str], destination_path: str) -> str:
+    if not download_urls:
+        return ""
+
+    last_error = ""
+    destination_dir = os.path.dirname(destination_path)
+    if destination_dir:
+        os.makedirs(destination_dir, exist_ok=True)
+
+    for url in download_urls:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(request, timeout=120) as response:
+                raw_bytes = response.read()
+
+            if url.lower().endswith(".bz2"):
+                raw_bytes = bz2.decompress(raw_bytes)
+
+            with open(destination_path, "wb") as out_file:
+                out_file.write(raw_bytes)
+            return ""
+        except Exception as exc:
+            last_error = str(exc)
+    return last_error or "No downloadable URL succeeded"
+
+
 def _iou(box_a, box_b) -> float:
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
@@ -97,6 +125,7 @@ class PPEModelAdapter:
         self.display_name = model_info["display_name"]
         self.description = model_info["description"]
         self.weights_path = model_info["weights_path"]
+        self.download_urls = model_info.get("download_urls", [])
         self.target_labels = {label.lower() for label in model_info.get("target_labels", [])}
         self.normalized_target_labels = {
             _normalize_label(label) for label in model_info.get("target_labels", [])
@@ -106,9 +135,12 @@ class PPEModelAdapter:
         self._absence_uses_features = model_key in {"gloves", "goggles", "boots"}
         self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
         self.person_model_path = model_info.get("person_model_path")
+        self.person_download_urls = model_info.get("person_download_urls", [])
 
         self.available = False
         self.load_error = None
+        self.download_error = None
+        self.downloaded = False
         self._model = None
         self._person_model = None
         self._supports_explicit_missing_classes = False
@@ -121,12 +153,24 @@ class PPEModelAdapter:
         self._qr_detector = cv2.QRCodeDetector() if self.supports_qr else None
         self._load()
 
+    def _download_weights_if_missing(self):
+        if os.path.exists(self.weights_path):
+            return
+        error = _download_any(self.download_urls, self.weights_path)
+        if error:
+            self.download_error = error
+            return
+        self.downloaded = True
+
     def _load(self):
+        self._download_weights_if_missing()
         if not os.path.exists(self.weights_path):
-            self.load_error = (
-                f"Weights missing at {self.weights_path}. "
-                "Ensure model files are committed with Git LFS and run 'git lfs pull'."
-            )
+            if self.download_error:
+                self.load_error = (
+                    f"Weights missing at {self.weights_path}. Download failed: {self.download_error}"
+                )
+            else:
+                self.load_error = f"Weights missing at {self.weights_path}"
             return
 
         try:
@@ -428,13 +472,13 @@ class PPEModelAdapter:
             ) + "Person fallback disabled: person model path not configured"
             return
         if not os.path.exists(self.person_model_path):
-            self.load_error = (
-                f"{self.load_error}; " if self.load_error else ""
-            ) + (
-                f"Person fallback model missing at {self.person_model_path}. "
-                "Ensure Git LFS model files are present and run 'git lfs pull'."
-            )
-            return
+            person_error = _download_any(self.person_download_urls, self.person_model_path)
+            if person_error:
+                self.load_error = (
+                    f"{self.load_error}; " if self.load_error else ""
+                ) + f"Person fallback model download failed: {person_error}"
+                return
+            self.downloaded = True
         try:
             self._person_model = YOLO(self.person_model_path)
         except Exception as exc:
@@ -674,6 +718,7 @@ class PPEModelAdapter:
 class HelmetModelAdapter(PPEModelAdapter):
     def __init__(self, model_key: str, model_info: Dict):
         self.person_model_path = model_info.get("person_model_path")
+        self.person_download_urls = model_info.get("person_download_urls", [])
         self._person_model = None
         super().__init__(model_key, model_info)
 
@@ -688,12 +733,14 @@ class HelmetModelAdapter(PPEModelAdapter):
             return
 
         if not os.path.exists(self.person_model_path):
-            self.load_error = (
-                f"Person model missing at {self.person_model_path}. "
-                "Ensure model files are checked out with Git LFS ('git lfs pull')."
-            )
-            self.available = False
-            return
+            person_error = _download_any(self.person_download_urls, self.person_model_path)
+            if person_error:
+                self.load_error = (
+                    f"Person model missing at {self.person_model_path}. Download failed: {person_error}"
+                )
+                self.available = False
+                return
+            self.downloaded = True
 
         try:
             self._person_model = YOLO(self.person_model_path)
@@ -801,30 +848,50 @@ class FatigueModelAdapter:
         self.display_name = model_info["display_name"]
         self.description = model_info["description"]
         self.weights_path = model_info["weights_path"]
+        self.download_urls = model_info.get("download_urls", [])
         self.shape_predictor_path = model_info.get("shape_predictor_path")
+        self.shape_download_urls = model_info.get("shape_download_urls", [])
         self.available = False
         self.load_error = None
+        self.download_error = None
+        self.downloaded = False
         self._engine = None
         self._fatigue_consecutive_by_camera = {}
         self._load()
+
+    def _download_dependencies_if_missing(self):
+        if not os.path.exists(self.weights_path):
+            error = _download_any(self.download_urls, self.weights_path)
+            if error:
+                self.download_error = error
+            else:
+                self.downloaded = True
+
+        if self.shape_predictor_path and not os.path.exists(self.shape_predictor_path):
+            error = _download_any(self.shape_download_urls, self.shape_predictor_path)
+            if error and not self.download_error:
+                self.download_error = error
+            elif not error:
+                self.downloaded = True
 
     def _load(self):
         if FatigueHybridEngine is None:
             self.load_error = f"Fatigue dependencies unavailable: {fatigue_import_error}"
             return
 
+        self._download_dependencies_if_missing()
         if not os.path.exists(self.weights_path):
-            self.load_error = (
-                f"Fatigue model missing at {self.weights_path}. "
-                "Ensure model files are checked out with Git LFS ('git lfs pull')."
-            )
+            self.load_error = f"Fatigue model missing at {self.weights_path}"
+            if self.download_error:
+                self.load_error += f". Download failed: {self.download_error}"
             return
         if not self.shape_predictor_path or not os.path.exists(self.shape_predictor_path):
             self.load_error = (
                 f"Shape predictor missing at {self.shape_predictor_path}. "
-                "Facial plotting is required for fatigue scoring. "
-                "Ensure model files are checked out with Git LFS ('git lfs pull')."
+                "Facial plotting is required for fatigue scoring."
             )
+            if self.download_error:
+                self.load_error += f" Download failed: {self.download_error}"
             return
 
         try:
@@ -921,6 +988,8 @@ class InferenceService:
         return {
             "available": adapter.available,
             "load_error": adapter.load_error,
+            "downloaded": getattr(adapter, "downloaded", False),
+            "download_error": getattr(adapter, "download_error", None),
             "model_classes": list(getattr(adapter, "model_classes", []) or []),
             "matched_target_labels": list(getattr(adapter, "matched_labels", []) or []),
             "configured_target_labels": sorted(getattr(adapter, "normalized_target_labels", []) or []),

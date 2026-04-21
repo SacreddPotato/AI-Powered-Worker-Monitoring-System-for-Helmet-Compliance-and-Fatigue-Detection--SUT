@@ -51,7 +51,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 **Frontend:** React 18 + Vite + Tailwind CSS v4 — "Tactical HUD" dark theme with DM Sans / JetBrains Mono typography
 
-**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), versioned in-repo via Git LFS
+**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), with auto-download from HuggingFace
 
 **Server:** Daphne (ASGI) serving both HTTP and WebSocket on a single port
 
@@ -89,6 +89,7 @@ scipy
 imutils
 werkzeug
 pillow
+huggingface-hub
 psutil
 openpyxl
 ```
@@ -111,10 +112,6 @@ conda activate fatigue_env
 conda install -c conda-forge dlib -y
 
 pip install -r requirements.txt
-
-# Fetch large model artifacts tracked by Git LFS
-git lfs install
-git lfs pull
 ```
 
 ### 2. Build the frontend
@@ -209,49 +206,12 @@ All endpoints are prefixed with `/api/v1/`.
 
 ## ML Model Weights
 
-Model weights are stored in `backend/ml_models/` and versioned with Git LFS.
+Model weights are **not** checked into the repository. They are stored in `backend/ml_models/` and downloaded automatically from HuggingFace on first use. You can override download URLs with environment variables:
 
-If you clone the repo and see tiny pointer files or missing weights, run:
-
-```bash
-git lfs install
-git lfs pull
-```
-
-Required files under `backend/ml_models/`:
-
-- `best.pt`
-- `yolov8n.pt`
-- `swin_best.pth`
-- `shape_predictor_68_face_landmarks.dat`
-- `vest_detection.pt`
-- `gloves_detection.pt`
-- `goggles_detection.pt`
-- `boots_detection.pt`
-- `faceshield_detection.pt`
-- `safety_suit_detection.pt`
-
-### Upload or update model files with Git LFS
-
-If you want to add/update weights directly in this repository (instead of runtime downloads), use Git LFS:
-
-```bash
-git lfs install
-git lfs track "backend/ml_models/**"
-
-# copy or replace model files in backend/ml_models/
-git add .gitattributes backend/ml_models/
-git commit -m "Add/update model weights via Git LFS"
-git push
-```
-
-On a fresh clone, pull model binaries with:
-
-```bash
-git lfs pull
-```
-
-`python run.py` now validates required model files on startup and prints missing paths if any LFS asset is absent.
+- `HELMET_MODEL_URL`
+- `PPE_MULTI_MODEL_URL`
+- `PERSON_MODEL_URL`
+- `SHAPE_PREDICTOR_URL`
 
 ## Project Structure
 
@@ -265,10 +225,10 @@ backend/
 ├── camera_service.py   # OpenCV camera capture service
 ├── inference_service.py# ML inference orchestrator
 ├── fatigue_engine.py   # Swin + dlib fatigue scoring
-├── model_service.py    # Model loading and health state
+├── model_service.py    # Model loading + HuggingFace download
 ├── alerts_service.py   # Alert creation logic
 ├── config.py           # Runtime configuration
-└── ml_models/          # Model weights (tracked with Git LFS)
+└── ml_models/          # Model weights (gitignored)
 
 frontend/
 ├── src/

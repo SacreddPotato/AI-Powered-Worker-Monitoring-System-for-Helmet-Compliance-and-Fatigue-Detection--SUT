@@ -18,31 +18,6 @@ FRONTEND_DIR = os.path.join(ROOT, "frontend")
 IS_WINDOWS = sys.platform == "win32"
 
 
-def _ensure_lfs_models_available() -> bool:
-    if BACKEND_DIR not in sys.path:
-        sys.path.insert(0, BACKEND_DIR)
-
-    try:
-        from backend.config import ensure_ml_models_layout, get_missing_model_files
-    except Exception as exc:
-        print(f"[run] Failed to inspect model assets: {exc}")
-        return False
-
-    ensure_ml_models_layout()
-    missing_files = get_missing_model_files()
-    if not missing_files:
-        return True
-
-    print("[run] Missing required model files:")
-    for file_name in missing_files:
-        print(f"      - {file_name}")
-    print("[run] This project expects model assets tracked in Git LFS.")
-    print("[run] Run these commands, then try again:")
-    print("      git lfs install")
-    print("      git lfs pull")
-    return False
-
-
 def _watch(proc, name, on_exit):
     """Wait for a process to finish and report its exit."""
     code = proc.wait()
@@ -101,8 +76,6 @@ def run():
         shutdown.set()
 
     if both or args.backend:
-        if not _ensure_lfs_models_available():
-            return
         if not _ensure_backend_database():
             return
         print("[run] Starting backend — Daphne on :7860")
