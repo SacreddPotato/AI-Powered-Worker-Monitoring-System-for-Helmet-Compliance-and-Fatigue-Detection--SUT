@@ -6,21 +6,26 @@ const SEVERITY_STYLES = {
   low: "border-l-blue-500",
 };
 
-export default function Toast({ alerts, onDismiss }) {
+export default function Toast({ alerts, onDismiss, maxVisible = 3 }) {
+  const visibleAlerts = (alerts || []).slice(-maxVisible);
+
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
-      {alerts.map((alert) => (
-        <ToastItem key={alert.id} alert={alert} onDismiss={onDismiss} />
+      {visibleAlerts.map((alert, i) => (
+        <ToastItem key={alert.__toastId || alert.id || i} alert={alert} onDismiss={onDismiss} />
       ))}
     </div>
   );
 }
 
 function ToastItem({ alert, onDismiss }) {
+  const dismissKey = alert.__toastId || alert.id;
+
   useEffect(() => {
-    const t = setTimeout(() => onDismiss(alert.id), 8000);
+    if (!dismissKey) return;
+    const t = setTimeout(() => onDismiss(dismissKey), 8000);
     return () => clearTimeout(t);
-  }, [alert.id, onDismiss]);
+  }, [dismissKey, onDismiss]);
 
   return (
     <div
@@ -31,7 +36,10 @@ function ToastItem({ alert, onDismiss }) {
       <div className="flex items-start justify-between gap-3">
         <div className="text-xs font-semibold text-zinc-50">{alert.message}</div>
         <button
-          onClick={() => onDismiss(alert.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (dismissKey) onDismiss(dismissKey);
+          }}
           className="text-zinc-500 hover:text-zinc-300 transition-colors"
           aria-label="Dismiss alert"
           title="Dismiss"

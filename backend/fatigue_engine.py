@@ -28,7 +28,10 @@ class FatigueHybridEngine:
         self.head_tilt_alert_degrees = float(head_tilt_alert_degrees)
         self.fatigue_threshold = float(fatigue_threshold)
         self.ear_threshold = 0.28
-        self.mar_threshold = 0.6
+        self.mar_scale_max = 1.0
+        # Tuned for observed closed-eye EAR band (~0.18-0.22).
+        self.ear_force_fatigue_threshold = 0.22
+        self.mar_narrow_threshold = 0.28
 
         self.model = models.swin_v2_s(weights=None)
         self.model.head = nn.Sequential(
@@ -196,9 +199,17 @@ class FatigueHybridEngine:
 
         ml_prob = self._fatigue_ml_probability(frame, rect)
         ear_score = _clamp((self.ear_threshold - ear) / self.ear_threshold, 0.0, 1.0)
-        mar_score = _clamp((mar - self.mar_threshold) / (1.0 - self.mar_threshold), 0.0, 1.0)
-        hybrid_score = (0.6 * ml_prob) + (0.3 * ear_score) + (0.1 * mar_score)
-        is_fatigued = hybrid_score >= self.fatigue_threshold
+        # Mouth openness is a continuous supporting signal (no hard yawning threshold).
+        mar_score = _clamp(mar / self.mar_scale_max, 0.0, 1.0)
+        hybrid_score = (0.65 * ml_prob) + (0.3 * ear_score) + (0.05 * mar_score)
+        eyes_closed_hard = ear <= self.ear_force_fatigue_threshold
+        mar_too_narrow = mar <= self.mar_narrow_threshold
+        forced_fatigue_state = bool(
+            eyes_closed_hard or (mar_too_narrow and ear <= (self.ear_threshold * 0.95))
+        )
+        if forced_fatigue_state:
+            hybrid_score = max(hybrid_score, self.fatigue_threshold + 0.05)
+        is_fatigued = forced_fatigue_state or (hybrid_score >= self.fatigue_threshold)
 
         return {
             "status": "ok",
@@ -213,6 +224,11 @@ class FatigueHybridEngine:
             "mar_score": round(float(mar_score), 4),
             "hybrid_score": round(float(hybrid_score), 4),
             "is_fatigued": bool(is_fatigued),
+            "forced_fatigue_state": bool(forced_fatigue_state),
+            "eyes_closed_hard": bool(eyes_closed_hard),
+            "mar_too_narrow": bool(mar_too_narrow),
+            "ear_force_fatigue_threshold": float(self.ear_force_fatigue_threshold),
+            "mar_narrow_threshold": float(self.mar_narrow_threshold),
             "head_tilt_exceeded": bool(head_tilt_exceeded),
             "facial_plotting_used": True,
             "landmarks_count": int(len(landmarks)),

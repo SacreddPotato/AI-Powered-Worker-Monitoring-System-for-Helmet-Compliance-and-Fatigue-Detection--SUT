@@ -13,6 +13,7 @@ Server sends binary JPEG frames continuously until the client disconnects.
 """
 import json
 import logging
+import os
 import threading
 import time
 
@@ -20,6 +21,11 @@ import cv2
 from channels.generic.websocket import WebsocketConsumer
 
 logger = logging.getLogger(__name__)
+
+STREAM_FPS = max(8, int(os.environ.get("CAMERA_STREAM_FPS", "16")))
+STREAM_FRAME_DELAY = 1.0 / STREAM_FPS
+STREAM_JPEG_QUALITY = min(95, max(40, int(os.environ.get("CAMERA_STREAM_JPEG_QUALITY", "65"))))
+INFERENCE_INTERVAL_MS = max(80, int(os.environ.get("CAMERA_INFERENCE_INTERVAL_MS", "260")))
 
 
 class CameraStreamConsumer(WebsocketConsumer):
@@ -115,14 +121,14 @@ class CameraStreamConsumer(WebsocketConsumer):
                         except Exception:
                             logger.exception("Annotation error on camera %s", self.camera_id)
 
-                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, STREAM_JPEG_QUALITY])
                     if jpeg is None:
                         continue
                     if not self._safe_send_bytes(jpeg.tobytes()):
                         return  # client disconnected
 
-                    # Throttle to ~25 FPS to avoid overwhelming the WS
-                    time.sleep(0.04)
+                    # Throttle to a stable FPS so encode/send does not overwhelm the event loop.
+                    time.sleep(STREAM_FRAME_DELAY)
             finally:
                 capture.release()
 
@@ -161,46 +167,91 @@ class CameraStreamConsumer(WebsocketConsumer):
             threading.Thread(target=svc.preload, daemon=True).start()
 
         cached = {}
-        counter = [0]
-        INFERENCE_INTERVAL = 5
-        heartbeat_counter = [0]
+        state_lock = threading.Lock()
+        inference_inflight = {"value": False}
+        last_inference_ts = {"value": 0.0}
+        heartbeat_counter = {"value": 0}
+        inference_interval_seconds = INFERENCE_INTERVAL_MS / 1000.0
         LOG_EVERY_N_INFERENCE_CYCLES = 12
+
+        def run_inference_cycle(frame_snapshot):
+            try:
+                if not svc.ready:
+                    mark_loading(self.camera_id)
+                    return
+
+                enabled = get_effective_enabled_model_keys(self.camera_id)
+                if not enabled:
+                    with state_lock:
+                        cached.clear()
+                        last_inference_ts["value"] = time.monotonic()
+                    mark_disabled(self.camera_id)
+                    return
+
+                new = {}
+                for key in enabled:
+                    new[key] = svc.run_inference_on_frame(key, frame_snapshot, camera_id=self.camera_id)
+
+                if camera is not None:
+                    for key, result in new.items():
+                        create_alert_from_inference(camera=camera, model_key=key, result=result)
+
+                detected_count = sum(1 for item in new.values() if bool(item.get("detected")))
+                with state_lock:
+                    cached.clear()
+                    cached.update(new)
+                    heartbeat_counter["value"] += 1
+                    last_inference_ts["value"] = time.monotonic()
+
+                mark_running(self.camera_id, model_keys=enabled, detected_count=detected_count)
+
+                if heartbeat_counter["value"] % LOG_EVERY_N_INFERENCE_CYCLES == 0:
+                    logger.info(
+                        "Inference heartbeat camera=%s models=%s detections=%s overlays=%s interval_ms=%s",
+                        self.camera_id,
+                        sorted(enabled),
+                        detected_count,
+                        sorted(self._overlays) if self._overlays else "all",
+                        INFERENCE_INTERVAL_MS,
+                    )
+            except Exception:
+                mark_error(self.camera_id, "inference_exception")
+                logger.exception("Inference exception on camera %s", self.camera_id)
+            finally:
+                with state_lock:
+                    inference_inflight["value"] = False
 
         def annotate(frame):
             if not svc.ready:
                 mark_loading(self.camera_id)
                 return frame
-            counter[0] += 1
+
+            now = time.monotonic()
+            should_launch = False
+            with state_lock:
+                due = (now - last_inference_ts["value"]) >= inference_interval_seconds
+                if due and not inference_inflight["value"]:
+                    inference_inflight["value"] = True
+                    should_launch = True
+
+            if should_launch:
+                threading.Thread(
+                    target=run_inference_cycle,
+                    args=(frame.copy(),),
+                    daemon=True,
+                ).start()
+
+            with state_lock:
+                cached_snapshot = dict(cached)
+
+            if not cached_snapshot:
+                return frame
+
             try:
-                if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
-                    enabled = get_effective_enabled_model_keys(self.camera_id)
-                    if not enabled:
-                        cached.clear()
-                        mark_disabled(self.camera_id)
-                        return frame
-                    new = {}
-                    for key in enabled:
-                        new[key] = svc.run_inference_on_frame(key, frame, camera_id=self.camera_id)
-                    if camera is not None:
-                        for key, result in new.items():
-                            create_alert_from_inference(camera=camera, model_key=key, result=result)
-                    detected_count = sum(1 for item in new.values() if bool(item.get("detected")))
-                    mark_running(self.camera_id, model_keys=enabled, detected_count=detected_count)
-                    heartbeat_counter[0] += 1
-                    if heartbeat_counter[0] % LOG_EVERY_N_INFERENCE_CYCLES == 0:
-                        logger.info(
-                            "Inference heartbeat camera=%s models=%s detections=%s overlays=%s",
-                            self.camera_id,
-                            sorted(enabled),
-                            detected_count,
-                            sorted(self._overlays) if self._overlays else "all",
-                        )
-                    cached.clear()
-                    cached.update(new)
-                return draw_annotations(frame, cached, enabled_overlays=self._overlays)
+                return draw_annotations(frame, cached_snapshot, enabled_overlays=self._overlays)
             except Exception:
-                mark_error(self.camera_id, "inference_exception")
-                logger.exception("Inference exception on camera %s", self.camera_id)
+                mark_error(self.camera_id, "annotation_exception")
+                logger.exception("Annotation exception on camera %s", self.camera_id)
                 return frame
 
         return annotate

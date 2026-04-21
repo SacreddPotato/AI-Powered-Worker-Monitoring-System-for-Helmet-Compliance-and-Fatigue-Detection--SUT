@@ -98,6 +98,8 @@ def _open_capture(source):
             if not cap.isOpened():
                 cap.release()
                 continue
+            # Keep capture queue shallow to reduce stream lag (backend support varies).
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             # Network streams can be slow to deliver the first frame
             if isinstance(source, str) and not source.isdigit():
                 cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)

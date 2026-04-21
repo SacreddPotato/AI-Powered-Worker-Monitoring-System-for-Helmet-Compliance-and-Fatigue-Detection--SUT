@@ -32,6 +32,7 @@ except Exception as mediapipe_import_error:  # pragma: no cover
 _LEFT_EYE_LANDMARKS = [33, 133, 159, 145, 153, 144, 163, 7]
 _RIGHT_EYE_LANDMARKS = [362, 263, 386, 374, 380, 381, 382, 398]
 _FEATURE_MISSING_CONFIDENCE = 0.7
+_PERSON_FALLBACK_MISSING_CONFIDENCE = 0.72
 
 
 def decode_base64_image(image_base64: str):
@@ -120,12 +121,17 @@ class PPEModelAdapter:
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
         self.supports_qr = model_key == "vest"
         self._absence_uses_features = model_key in {"gloves", "goggles"}
+        self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
+        self.person_model_path = model_info.get("person_model_path")
+        self.person_download_urls = model_info.get("person_download_urls", [])
 
         self.available = False
         self.load_error = None
         self.download_error = None
         self.downloaded = False
         self._model = None
+        self._person_model = None
+        self._supports_explicit_missing_classes = False
         self._mp_hands = None
         self._mp_face_mesh = None
         self._feature_lock = threading.Lock()
@@ -181,6 +187,9 @@ class PPEModelAdapter:
                     self.matched_labels = list(self.model_classes)
             else:
                 self.matched_labels = list(self.model_classes)
+            self._supports_explicit_missing_classes = any(
+                _is_missing_label(label) for label in self.matched_labels
+            )
             self.available = True
 
             if self._absence_uses_features:
@@ -204,6 +213,9 @@ class PPEModelAdapter:
                             min_detection_confidence=0.35,
                             min_tracking_confidence=0.35,
                         )
+
+            if self._absence_uses_person_overlap:
+                self._load_person_model_for_absence()
         except Exception as exc:
             self.available = False
             self.load_error = str(exc)
@@ -275,6 +287,42 @@ class PPEModelAdapter:
             if right_bbox is not None:
                 out.append(right_bbox)
         return out
+
+    def _load_person_model_for_absence(self):
+        if self._person_model is not None:
+            return
+        if not self.person_model_path:
+            self.load_error = (
+                f"{self.load_error}; " if self.load_error else ""
+            ) + "Person fallback disabled: person model path not configured"
+            return
+        if not os.path.exists(self.person_model_path):
+            person_error = _download_any(self.person_download_urls, self.person_model_path)
+            if person_error:
+                self.load_error = (
+                    f"{self.load_error}; " if self.load_error else ""
+                ) + f"Person fallback model download failed: {person_error}"
+                return
+            self.downloaded = True
+        try:
+            self._person_model = YOLO(self.person_model_path)
+        except Exception as exc:
+            self.load_error = (
+                f"{self.load_error}; " if self.load_error else ""
+            ) + f"Person fallback model load failed: {exc}"
+
+    def _detect_person_regions(self, frame):
+        if self._person_model is None:
+            return []
+        try:
+            person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
+            out = []
+            for box in person_results[0].boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                out.append((x1, y1, x2, y2, float(box.conf[0])))
+            return out
+        except Exception:
+            return []
 
     def _extract_qr(self, frame, boxes) -> str:
         if self._qr_detector is None or len(boxes) == 0:
@@ -354,6 +402,10 @@ class PPEModelAdapter:
             feature_count = 0
             feature_missing_count = 0
             feature_missing_confidences = []
+            person_count = 0
+            person_missing_count = 0
+            person_missing_confidences = []
+            used_person_overlap_fallback = False
 
             if self._absence_uses_features:
                 feature_boxes = self._detect_feature_regions(frame)
@@ -385,22 +437,76 @@ class PPEModelAdapter:
                             }
                         )
 
+            explicit_missing_from_model = len(missing_confidences)
+            should_run_person_fallback = (
+                self._absence_uses_person_overlap
+                and (
+                    not self._supports_explicit_missing_classes
+                    or explicit_missing_from_model == 0
+                )
+            )
+
+            if should_run_person_fallback:
+                person_boxes = self._detect_person_regions(frame)
+                person_count = len(person_boxes)
+                if person_boxes:
+                    used_person_overlap_fallback = True
+                ppe_present_boxes = [
+                    (b["x1"], b["y1"], b["x2"], b["y2"])
+                    for b in annotation_boxes
+                    if b["color"] == "green"
+                ]
+
+                for px1, py1, px2, py2, pconf in person_boxes:
+                    person_box = (px1, py1, px2, py2)
+                    has_ppe = any(
+                        _box_center_inside(ppe_box, person_box) or _iou(person_box, ppe_box) > 0.03
+                        for ppe_box in ppe_present_boxes
+                    )
+                    if not has_ppe:
+                        person_missing_count += 1
+                        person_missing_confidences.append(
+                            max(float(pconf), _PERSON_FALLBACK_MISSING_CONFIDENCE)
+                        )
+                        annotation_boxes.append(
+                            {
+                                "x1": int(px1),
+                                "y1": int(py1),
+                                "x2": int(px2),
+                                "y2": int(py2),
+                                "label": f"no {self.model_key}",
+                                "color": "red",
+                            }
+                        )
+
             explicit_missing_count = len([b for b in annotation_boxes if b["color"] == "red"])
-            missing_count = max(explicit_missing_count, feature_missing_count)
+            missing_count = max(explicit_missing_count, feature_missing_count, person_missing_count)
             detected = missing_count > 0
             confidence = (
-                max(missing_confidences + feature_missing_confidences, default=0.0)
+                max(missing_confidences + feature_missing_confidences + person_missing_confidences, default=0.0)
                 if detected
                 else max(selected_confidences, default=0.0)
             )
+
+            if self._absence_uses_features:
+                absence_detector = "mediapipe"
+            elif self._supports_explicit_missing_classes and used_person_overlap_fallback:
+                absence_detector = "model_labels+person_overlap_fallback"
+            elif used_person_overlap_fallback:
+                absence_detector = "person_overlap_fallback"
+            else:
+                absence_detector = "model_labels"
+
             payload = {
                 "count": count,
                 "missing_count": missing_count,
                 "feature_count": feature_count,
                 "feature_missing_count": feature_missing_count,
-                "person_count": feature_count,
-                "person_missing_count": feature_missing_count,
-                "absence_detector": "mediapipe" if self._absence_uses_features else "model_labels",
+                "person_count": person_count if person_count else feature_count,
+                "person_missing_count": person_missing_count if person_count else feature_missing_count,
+                "absence_detector": absence_detector,
+                "supports_explicit_missing_classes": bool(self._supports_explicit_missing_classes),
+                "used_person_overlap_fallback": bool(used_person_overlap_fallback),
                 "ok_count": len([b for b in annotation_boxes if b["color"] == "green"]),
                 "boxes": annotation_boxes,
                 "classification": (
@@ -642,7 +748,8 @@ class FatigueModelAdapter:
                 }
 
             previous = self._fatigue_consecutive_by_camera.get(camera_id, 0)
-            if analysis["is_fatigued"]:
+            forced_fatigue_state = bool(analysis.get("forced_fatigue_state"))
+            if analysis["is_fatigued"] or forced_fatigue_state:
                 previous += 1
             else:
                 previous = 0
@@ -650,10 +757,12 @@ class FatigueModelAdapter:
 
             sustained_fatigue = previous >= FATIGUE_CONSECUTIVE_FRAMES_THRESHOLD
             head_tilt_exceeded = bool(analysis["head_tilt_exceeded"])
-            # Classification driven by hybrid formula; head tilt is informational only
-            detected = sustained_fatigue
+            # Forced fatigue (hard eye closure) triggers immediately; otherwise sustained hybrid fatigue.
+            detected = forced_fatigue_state or sustained_fatigue
 
             reason = []
+            if forced_fatigue_state:
+                reason.append("forced_eye_closure")
             if sustained_fatigue:
                 reason.append("sustained_fatigue")
             if head_tilt_exceeded:
