@@ -34,26 +34,3 @@ class Alert(models.Model):
 
     def __str__(self):
         return f"[{self.severity}] {self.message} ({self.camera.name})"
-
-
-class CameraAlertSeverity(models.Model):
-    SEVERITY_CHOICES = [
-        ('high', 'High'),
-        ('medium', 'Medium'),
-        ('low', 'Low'),
-    ]
-
-    camera = models.ForeignKey(Camera, on_delete=models.CASCADE, related_name='alert_severity_overrides')
-    model_key = models.CharField(max_length=50)
-    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low')
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ['camera', 'model_key']
-        indexes = [
-            models.Index(fields=['camera', 'model_key']),
-            models.Index(fields=['model_key']),
-        ]
-
-    def __str__(self):
-        return f"{self.camera.name}:{self.model_key}={self.severity}"

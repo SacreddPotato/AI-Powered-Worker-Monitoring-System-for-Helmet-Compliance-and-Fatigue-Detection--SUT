@@ -26,12 +26,6 @@ SHAPE_PREDICTOR_URL = os.environ.get(
     "SHAPE_PREDICTOR_URL",
     "https://github.com/davisking/dlib-models/raw/master/shape_predictor_68_face_landmarks.dat.bz2",
 )
-BOOTS_MODEL_URL = os.environ.get(
-    "BOOTS_MODEL_URL",
-    "https://huggingface.co/keremberke/yolov8n-boots-detection/resolve/main/best.pt",
-)
-FACESHIELD_MODEL_URL = os.environ.get("FACESHIELD_MODEL_URL", "")
-SAFETY_SUIT_MODEL_URL = os.environ.get("SAFETY_SUIT_MODEL_URL", "")
 
 MODEL_DEFINITIONS = {
     "helmet": {
@@ -41,7 +35,8 @@ MODEL_DEFINITIONS = {
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
         "download_urls": [HELMET_MODEL_URL, PPE_MULTI_MODEL_URL],
         "person_download_urls": [PERSON_MODEL_URL],
-        "target_labels": ["no-hardhat", "no_helmet", "no-helmet", "no hardhat"],
+        # Only presence classes. Absence is calculated via person box overlap.
+        "target_labels": ["hardhat", "helmet", "safety helmet"],
         "strict_target_match": False,
     },
     "fatigue": {
@@ -57,55 +52,60 @@ MODEL_DEFINITIONS = {
         "description": "Detects high-visibility safety vests and reads vest QR IDs.",
         "weights_path": str(ML_MODELS_DIR / "vest_detection.pt"),
         "download_urls": [PPE_MULTI_MODEL_URL],
-        "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
-        "person_download_urls": [PERSON_MODEL_URL],
-        "target_labels": ["vest", "safety vest", "safety_vest", "safety-vest"],
+        # Actual model classes: ['no vest', 'vest']
+        "target_labels": ["vest", "no vest"],
+        "strict_target_match": True,
+        "conf_threshold": 0.40,
     },
     "gloves": {
         "display_name": "Gloves Detection",
         "description": "Detects worker safety gloves.",
         "weights_path": str(ML_MODELS_DIR / "gloves_detection.pt"),
         "download_urls": [],
-        "target_labels": ["glove", "gloves", "no_glove", "no-glove"],
+        # Absence detection handled by MediaPipe hand regions
+        "target_labels": ["glove", "gloves", "no glove", "no gloves", "no_glove", "no-glove"],
+        "strict_target_match": False,
+        "conf_threshold": 0.40,
     },
     "goggles": {
         "display_name": "Goggles Detection",
         "description": "Detects protective eyewear (goggles).",
         "weights_path": str(ML_MODELS_DIR / "goggles_detection.pt"),
         "download_urls": [],
-        "target_labels": ["goggles", "goggle", "no_goggles", "no-goggles"],
-    },
-    "boots": {
-        "display_name": "Boot Detection",
-        "description": "Detects worker safety boots.",
-        "weights_path": str(ML_MODELS_DIR / "boots_detection.pt"),
-        "download_urls": [BOOTS_MODEL_URL],
-        "target_labels": ["boot", "boots", "safety boot", "safety boots", "no_boot", "no-boots", "no boots"],
+        # Actual model classes: ['safety_goggles'] — presence only
+        # Absence detection handled by MediaPipe eye-region tracking
+        "target_labels": ["safety_goggles", "safety goggles", "goggles", "goggle"],
         "strict_target_match": False,
+        "conf_threshold": 0.50,  # raised to reduce sunglasses false positives
     },
-    "faceshield": {
+    "face_shield": {
         "display_name": "Face Shield Detection",
-        "description": "Detects protective face shields.",
-        "weights_path": str(ML_MODELS_DIR / "faceshield_detection.pt"),
-        "download_urls": [FACESHIELD_MODEL_URL],
+        "description": "Detects protective face shields in hazardous environments.",
+        "weights_path": str(ML_MODELS_DIR / "face_shield_detection.pt"),
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
+        "download_urls": [],
         "person_download_urls": [PERSON_MODEL_URL],
-        "target_labels": ["face shield", "faceshield", "shield", "no_face_shield", "no-faceshield", "no shield"],
+        # Actual model classes: ['.', 'Face Shield'] — '.' is a garbage class to ignore
+        "target_labels": ["face shield", "face-shield"],
         "strict_target_match": False,
+        "conf_threshold": 0.85,  # very high — real face shields are very distinct; 0.60 still fires on sunglasses at 76%
     },
-    "safetysuit": {
+    "safety_suit": {
         "display_name": "Safety Suit Detection",
-        "description": "Detects protective safety suits/coveralls.",
+        "description": "Ensures workers are wearing full-body safety suits.",
         "weights_path": str(ML_MODELS_DIR / "safety_suit_detection.pt"),
-        "download_urls": [SAFETY_SUIT_MODEL_URL],
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
+        "download_urls": [],
         "person_download_urls": [PERSON_MODEL_URL],
-        "target_labels": ["safety suit", "safetysuit", "coverall", "protective suit", "no_safety_suit", "no safety suit"],
+        # Actual model classes: ['safety_suit', 'safety_vest'] — presence only
+        # No absence label exists in this model; detection means PRESENT (compliant)
+        "target_labels": ["safety_suit", "safety suit", "safety_vest", "safety vest"],
         "strict_target_match": False,
+        "conf_threshold": 0.75,  # aggressive — dark formal blazers still triggered at 0.55
     },
 }
 
-DEFAULT_ALERT_CONFIDENCE_THRESHOLD = 0.45
+DEFAULT_ALERT_CONFIDENCE_THRESHOLD = 0.35
 FATIGUE_CONSECUTIVE_FRAMES_THRESHOLD = 8
 HEAD_TILT_ALERT_DEGREES = 15.0
 
@@ -121,9 +121,6 @@ def ensure_ml_models_layout() -> None:
         "vest_detection.pt",
         "gloves_detection.pt",
         "goggles_detection.pt",
-        "boots_detection.pt",
-        "faceshield_detection.pt",
-        "safety_suit_detection.pt",
     ]
 
     for name in legacy_names:

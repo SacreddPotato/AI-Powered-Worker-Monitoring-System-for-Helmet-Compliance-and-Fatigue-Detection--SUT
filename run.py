@@ -78,7 +78,7 @@ def run():
     if both or args.backend:
         if not _ensure_backend_database():
             return
-        print("[run] Starting backend — Daphne on :7860")
+        print("[run] Starting backend - Daphne on :7860")
         procs["Backend"] = subprocess.Popen(
             [sys.executable, "-m", "daphne", "-b", "0.0.0.0", "-p", "7860",
              "sentinel.asgi:application"],
@@ -87,7 +87,7 @@ def run():
 
     if both or args.frontend:
         npm = "npm.cmd" if IS_WINDOWS else "npm"
-        print("[run] Starting frontend — Vite on :5173")
+        print("[run] Starting frontend - Vite on :5173")
         procs["Frontend"] = subprocess.Popen(
             [npm, "run", "dev"],
             cwd=FRONTEND_DIR,
@@ -104,8 +104,8 @@ def run():
 
     if both:
         print("[run] Dashboard ready:")
-        print("      Frontend  → http://localhost:5173")
-        print("      Backend   → http://localhost:7860")
+        print("      Frontend  -> http://localhost:5173")
+        print("      Backend   -> http://localhost:7860")
         print("      Press Ctrl+C to stop both.\n")
 
     try:

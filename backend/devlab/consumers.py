@@ -1,6 +1,8 @@
 import json
 import threading
 import cv2
+import base64
+import numpy as np
 from channels.generic.websocket import WebsocketConsumer
 from .models import DevVideo
 from detection.services import get_inference_service
@@ -104,3 +106,55 @@ class VideoAnalysisConsumer(WebsocketConsumer):
             self.send(text_data=json.dumps(data))
         except Exception:
             self._stop.set()
+
+
+class WebcamAnalysisConsumer(WebsocketConsumer):
+    """
+    Consumer for real-time webcam analysis.
+    Expects JSON { "frame": "base64...", "models": ["helmet", ...] }
+    """
+
+    def connect(self):
+        self.accept()
+        svc = get_inference_service()
+        if not svc.ready:
+            threading.Thread(target=svc.preload, daemon=True).start()
+
+    def receive(self, text_data=None, bytes_data=None):
+        try:
+            data = json.loads(text_data)
+            frame_b64 = data.get('frame')
+            enabled_models = data.get('models', [])
+
+            if not frame_b64:
+                return
+
+            if "," in frame_b64:
+                frame_b64 = frame_b64.split(",", 1)[1]
+
+            img_data = base64.b64decode(frame_b64)
+            nparr = np.frombuffer(img_data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if frame is None:
+                return
+
+            svc = get_inference_service()
+            if not svc.ready:
+                self.send(json.dumps({'type': 'status', 'ready': False}))
+                return
+
+            detections = {}
+            for key in enabled_models:
+                # Use camera_id=0 for dev lab generic processing
+                detections[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
+
+            print(f"[WebcamConsumer] Detected: {list(detections.keys())}") # DEBUG
+            
+            self.send(json.dumps({
+                'type': 'detections',
+                'detections': detections
+            }))
+
+        except Exception as e:
+            self.send(json.dumps({'type': 'error', 'message': str(e)}))

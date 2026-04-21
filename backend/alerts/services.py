@@ -12,21 +12,9 @@ SEVERITY_MAP = {
     'vest': 'medium',
     'gloves': 'low',
     'goggles': 'low',
-    'boots': 'medium',
-    'faceshield': 'medium',
-    'safetysuit': 'medium',
 }
 
 ALERT_COOLDOWN_SECONDS = 15
-
-
-def _resolve_alert_severity(camera_id, model_key):
-    from .models import CameraAlertSeverity
-
-    override = CameraAlertSeverity.objects.filter(camera_id=camera_id, model_key=model_key).values_list('severity', flat=True).first()
-    if override:
-        return override
-    return SEVERITY_MAP.get(model_key, 'low')
 
 
 def _build_alert_message(model_key, payload):
@@ -44,17 +32,10 @@ def _build_alert_message(model_key, payload):
             return f"Helmet missing detected ({missing} worker{'s' if missing != 1 else ''})"
         return "Helmet compliance violation detected"
 
-    if model_key in {'gloves', 'goggles', 'vest', 'boots', 'faceshield', 'safetysuit'}:
+    if model_key in {'gloves', 'goggles', 'vest'}:
         missing = int(payload.get('missing_count', 0) or 0)
         if missing > 0:
-            noun = {
-                'gloves': 'gloves',
-                'goggles': 'goggles',
-                'vest': 'safety vest',
-                'boots': 'safety boots',
-                'faceshield': 'face shield',
-                'safetysuit': 'safety suit',
-            }[model_key]
+            noun = {'gloves': 'gloves', 'goggles': 'goggles', 'vest': 'safety vest'}[model_key]
             return f"Missing {noun} detected ({missing})"
         return f"{model_key.capitalize()} compliance violation detected"
 
@@ -62,16 +43,26 @@ def _build_alert_message(model_key, payload):
 
 
 def _should_emit_alert(camera_id, model_key):
+    # Do not emit a new alert if there is already an active (open) alert for this camera/model
+    existing_open = Alert.objects.filter(
+        camera_id=camera_id,
+        model_key=model_key,
+        status='open',
+    ).exists()
+    
+    if existing_open:
+        return False
+
+    # Also respect the minimum cooldown between consecutive alerts of the same type
     since = timezone.now() - timedelta(seconds=ALERT_COOLDOWN_SECONDS)
     return not Alert.objects.filter(
         camera_id=camera_id,
         model_key=model_key,
-        status='open',
         created_at__gte=since,
     ).exists()
 
 def create_alert(camera, model_key, message, detection=None, payload=None):
-    severity = _resolve_alert_severity(camera.id, model_key)
+    severity = SEVERITY_MAP.get(model_key, 'low')
     alert = Alert.objects.create(
         detection=detection,
         camera=camera,

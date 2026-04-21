@@ -6,52 +6,57 @@ const SEVERITY_STYLES = {
   low: "border-l-blue-500",
 };
 
-export default function Toast({ alerts, onDismiss, maxVisible = 3 }) {
-  const visibleAlerts = (alerts || []).slice(-maxVisible);
-
+export default function Toast({ alerts, onDismiss }) {
+  if (alerts.length === 0) return null;
+  
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
-      {visibleAlerts.map((alert, i) => (
-        <ToastItem key={alert.__toastId || alert.id || i} alert={alert} onDismiss={onDismiss} />
+    <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-2 pointer-events-none w-80">
+      <div className="flex justify-between items-center mb-1 pointer-events-auto">
+        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest pl-1">Notifications</span>
+        {alerts.length > 1 && (
+          <button 
+            onClick={() => alerts.forEach(a => onDismiss(a.id))}
+            className="text-[9px] font-bold text-zinc-600 hover:text-zinc-300 transition-colors"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
+      {alerts.map((alert) => (
+        <ToastItem key={alert.id} alert={alert} onDismiss={() => onDismiss(alert.id)} />
       ))}
     </div>
   );
 }
 
 function ToastItem({ alert, onDismiss }) {
-  const dismissKey = alert.__toastId || alert.id;
-
   useEffect(() => {
-    if (!dismissKey) return;
-    const t = setTimeout(() => onDismiss(dismissKey), 8000);
+    const t = setTimeout(onDismiss, 6000);
     return () => clearTimeout(t);
-  }, [dismissKey, onDismiss]);
+  }, [onDismiss]);
+
+  const severityColor = alert.severity === "high" ? "bg-red-500" : alert.severity === "medium" ? "bg-amber-500" : "bg-blue-500";
 
   return (
     <div
-      className={`pointer-events-auto bg-zinc-900 border border-zinc-800 rounded-lg p-3 min-w-[300px] animate-slide-in border-l-[3px] ${
-        SEVERITY_STYLES[alert.severity] || "border-l-zinc-600"
-      }`}
+      className="pointer-events-auto bg-[#0a0a0d]/90 backdrop-blur-md border border-zinc-800/80 rounded-lg p-2.5 shadow-2xl animate-slide-in relative group overflow-hidden"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-xs font-semibold text-zinc-50">{alert.message}</div>
+      <div className={`absolute top-0 bottom-0 left-0 w-1 ${severityColor}`} />
+      <div className="flex justify-between items-start pl-2 gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-bold text-zinc-100 leading-tight truncate">{alert.message}</div>
+          <div className="text-[8px] text-zinc-500 mt-1 uppercase tracking-tight font-medium opacity-80">
+            {alert.camera_name} &middot; Just now
+          </div>
+        </div>
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (dismissKey) onDismiss(dismissKey);
-          }}
-          className="text-zinc-500 hover:text-zinc-300 transition-colors"
-          aria-label="Dismiss alert"
-          title="Dismiss"
+          onClick={onDismiss}
+          className="text-zinc-600 hover:text-zinc-200 transition-colors p-0.5 opacity-0 group-hover:opacity-100"
         >
-          <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <line x1="4" y1="4" x2="12" y2="12" />
-            <line x1="12" y1="4" x2="4" y2="12" />
+          <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M4 4L12 12M12 4L4 12" />
           </svg>
         </button>
-      </div>
-      <div className="text-[10px] text-zinc-500 mt-1">
-        {alert.camera_name} &middot; Just now
       </div>
     </div>
   );

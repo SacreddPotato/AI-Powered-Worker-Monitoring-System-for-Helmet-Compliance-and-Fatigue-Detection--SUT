@@ -91,20 +91,3 @@ def get_inference_service():
 
 def get_model_definitions():
     return MODEL_DEFINITIONS
-
-
-def get_globally_enabled_model_keys():
-    from .models import ModelSetting
-    return set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
-
-
-def get_effective_enabled_model_keys(camera_id):
-    from .models import CameraModel
-
-    enabled = get_globally_enabled_model_keys()
-    overrides = CameraModel.objects.filter(camera_id=camera_id).select_related('model_setting')
-    for override in overrides:
-        key = override.model_setting_id
-        if not override.is_enabled:
-            enabled.discard(key)
-    return enabled

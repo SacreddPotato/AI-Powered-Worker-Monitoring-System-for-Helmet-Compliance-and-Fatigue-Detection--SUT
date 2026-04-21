@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
-import useCameraStream from "../hooks/useCameraStream";
 
-const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
-const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles", "boots", "faceshield", "safetysuit"];
+const TABS = ["Video Analysis", "Live Webcam", "Image Analysis", "Threshold Tuning"];
+const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles", "face_shield", "safety_suit"];
 
 export default function DevLabPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -57,11 +56,16 @@ export default function DevLabPage() {
         )}
         {visited.has(1) && (
           <div className={`h-full ${activeTab === 1 ? "" : "hidden"}`}>
-            <LiveCameraTest />
+            <LiveWebcamAnalysis />
           </div>
         )}
         {visited.has(2) && (
           <div className={`h-full ${activeTab === 2 ? "" : "hidden"}`}>
+            <ImageAnalysis />
+          </div>
+        )}
+        {visited.has(3) && (
+          <div className={`h-full ${activeTab === 3 ? "" : "hidden"}`}>
             <ThresholdTuning />
           </div>
         )}
@@ -83,17 +87,110 @@ const ANNO_COLORS = {
   vest: "rgb(50,160,255)",
   gloves: "rgb(255,220,0)",
   goggles: "rgb(0,200,220)",
-  boots: "rgb(255,220,0)",
-  faceshield: "rgb(0,200,220)",
-  safetysuit: "rgb(50,160,255)",
   red: "rgb(255,60,0)",
   green: "rgb(80,200,0)",
   blue: "rgb(50,160,255)",
   yellow: "rgb(255,220,0)",
   cyan: "rgb(0,200,220)",
   orange: "rgb(255,140,0)",
+  purple: "rgb(168, 85, 247)",
+  amber: "rgb(245, 158, 11)",
   white: "rgb(255,255,255)",
+  face_shield: "rgb(168, 85, 247)",
+  safety_suit: "rgb(245, 158, 11)",
 };
+
+// ============================================================
+// Shared Compliance UI Components
+// ============================================================
+
+function ComplianceBanner({ label, detected, confidence, modelKey, modelStatus }) {
+  const isFatigue = modelKey === "fatigue";
+  const displayName = label.charAt(0).toUpperCase() + label.slice(1);
+
+  // If the model is not available (weights missing, error), show neutral N/A
+  if (!modelStatus || modelStatus === "unavailable" || modelStatus === "error") {
+    return (
+      <div className="w-full max-w-md mx-auto mb-2 last:mb-0">
+        <div className="flex items-center justify-center gap-2 py-1.5 px-3 rounded-md border bg-zinc-800/10 border-zinc-700/20 text-zinc-500 text-[9px] font-bold shadow-sm">
+          <span>⚫</span>
+          <span>N/A – {displayName} Unavailable</span>
+        </div>
+      </div>
+    );
+  }
+
+  // When no person was found in frame (helmet adapter specific)
+  if (modelStatus === "no_person") {
+    return (
+      <div className="w-full max-w-md mx-auto mb-2 last:mb-0">
+        <div className="flex items-center justify-center gap-2 py-1.5 px-3 rounded-md border bg-zinc-800/10 border-zinc-700/20 text-zinc-400 text-[9px] font-bold shadow-sm">
+          <span>🔍</span>
+          <span>N/A – {displayName}: No Person</span>
+        </div>
+      </div>
+    );
+  }
+
+  // For ALL models: backend 'detected=true' means VIOLATION FOUND → NON-COMPLIANT
+  // Helmet: detected=true means person missing helmet
+  // PPE: detected=true means PPE absence confirmed  
+  // Fatigue: detected=true means fatigue confirmed
+  const compliant = !detected;
+
+  const statusText = isFatigue
+    ? (compliant ? "ACTIVE & ALERT" : "FATIGUE DETECTED")
+    : (compliant ? `${displayName} Detected` : `${displayName} Not Detected`);
+
+  const bgColor = compliant ? "bg-green-500/5" : "bg-red-500/5";
+  const borderColor = compliant ? "border-green-500/20" : "border-red-500/20";
+  const textColor = compliant ? "text-green-500" : "text-red-500";
+  const icon = compliant ? "✅" : "⚠️";
+  const prefix = compliant ? "COMPLIANT" : "NON-COMPLIANT";
+
+  return (
+    <div className="w-full max-w-md mx-auto mb-2 last:mb-0">
+      <div className={`flex items-center justify-center gap-2 py-1.5 px-3 rounded-md border ${bgColor} ${borderColor} ${textColor} text-[9px] font-bold shadow-sm transition-all duration-300`}>
+        <span>{icon}</span>
+        <span>{prefix} – {statusText}</span>
+      </div>
+      {confidence > 0 && (
+        <div className="text-[8px] text-zinc-600 font-mono text-center mt-0.5">
+          Confidence: {(confidence * 100).toFixed(1)}%
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ComplianceList({ detections, overlays }) {
+  if (!detections) return null;
+  
+  return (
+    <div className="mt-4 px-4 pb-2">
+      {Object.entries(detections)
+        .filter(([key]) => overlays.includes(key))
+        .map(([key, det]) => {
+          // Always trust the backend's authoritative values.
+          // detected=true means VIOLATION for ALL model types.
+          const detected = det.detected ?? false;
+          const confidence = det.confidence ?? 0;
+          const modelStatus = det.status ?? "unavailable";
+
+          return (
+            <ComplianceBanner 
+              key={key} 
+              modelKey={key}
+              label={key.replace(/_/g, " ")} 
+              detected={detected} 
+              confidence={confidence}
+              modelStatus={modelStatus}
+            />
+          );
+        })}
+    </div>
+  );
+}
 
 function drawPPEBoxes(ctx, payload, modelKey, tx, ty, s) {
   const defaultColor = ANNO_COLORS[modelKey] || ANNO_COLORS.white;
@@ -205,6 +302,7 @@ function VideoAnalysis() {
   const [logs, setLogs] = useState([]);
   const [config, setConfig] = useState({ sample_every_n_frames: 3 });
   const [videoDone, setVideoDone] = useState(false);
+  const [currentDetections, setCurrentDetections] = useState(null);
 
   const fileRef = useRef();
   const videoRef = useRef();
@@ -437,6 +535,12 @@ function VideoAnalysis() {
         if (nearest !== null) {
           const detections = frameMapRef.current.get(nearest);
           if (detections) {
+            // Update react state for banners (throttled implicitly by draw loop being fast)
+            // but we only do it if the data is different or every few frames
+            if (currentFrame % 3 === 0) {
+                setCurrentDetections(detections);
+            }
+
             const scale = Math.min(canvas.width / vW, canvas.height / vH);
             const offX = (canvas.width - vW * scale) / 2;
             const offY = (canvas.height - vH * scale) / 2;
@@ -480,79 +584,103 @@ function VideoAnalysis() {
     : 0;
 
   return (
-    <div className="flex h-full">
-      {/* Left: Controls */}
-      <div className="w-1/2 border-r border-zinc-800/60 p-4 overflow-y-auto space-y-5">
-        <Section title="Upload Video">
+    <div className="grid grid-cols-[320px_1fr_350px] h-full overflow-hidden">
+      {/* Left Column: Controls */}
+      <div className="border-r border-zinc-800/60 p-5 overflow-y-auto shrink-0 space-y-8 bg-black/20">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-500/80 mb-1">Configuration Hub</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Input parameters and model selection</p>
+        </div>
+
+        <Section 
+          title="Upload Video" 
+          icon={ICONS.upload}
+          description="Prepare a video file for batch AI analysis."
+        >
           <div
             onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-zinc-800 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500/50 transition-colors"
+            className="border-2 border-dashed border-zinc-800/50 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500/40 hover:bg-blue-500/5 transition-all group"
           >
-            <div className="text-2xl text-zinc-600 mb-2">&#128206;</div>
-            <div className="text-[11px] text-zinc-500">{file ? file.name : "Drop video or click to browse"}</div>
-            <div className="text-[9px] text-zinc-700 mt-1">MP4, AVI, MOV</div>
+            <div className="text-2xl text-zinc-700 mb-2 group-hover:scale-110 transition-transform">&#128206;</div>
+            <div className="text-[10px] text-zinc-400 font-semibold">{file ? file.name : "Drop video or browse"}</div>
+            <div className="text-[8px] text-zinc-600 mt-1 uppercase tracking-widest">MP4, AVI, MOV</div>
             <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
           </div>
           {file && !video && (
-            <button onClick={handleUpload} className="mt-2 w-full py-2 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25">
-              Upload & Prepare for Analysis
+            <button onClick={handleUpload} className="mt-3 w-full py-2.5 rounded-lg bg-blue-500 text-white text-[10px] font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors">
+              Synchronize For Analysis
             </button>
           )}
         </Section>
 
         {video && (
           <>
-            <Section title="Annotation Overlays">
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <Section 
+              title="Intelligence Layers" 
+              icon={ICONS.layers}
+              description="Enable vision models for real-time inference."
+            >
+              <div className="grid grid-cols-2 gap-2">
                 {ALL_MODELS.map((key) => (
-                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <label key={key} className="flex items-center gap-2 cursor-pointer bg-zinc-900/30 p-2 rounded-lg border border-zinc-800/50 hover:border-zinc-700 transition-colors">
                     <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
-                    <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+                    <span className={`text-[9px] font-bold uppercase tracking-tighter ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key.replace('_', ' ')}</span>
                   </label>
                 ))}
               </div>
             </Section>
 
-            <Section title="Analysis">
-              <div className="space-y-2">
-                <ConfigRow label="Sample every N frames" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
-                {!running ? (
-                  <button
-                    onClick={handleStart}
-                    className="w-full py-2.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25"
-                  >
-                    Play & Analyze Live
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleStop}
-                    className="w-full py-2.5 rounded-lg bg-red-500/15 text-red-400 text-[10px] font-semibold hover:bg-red-500/25"
-                  >
-                    Stop Analysis
-                  </button>
-                )}
+            <Section 
+              title="Inference Params" 
+              icon={ICONS.activity}
+              description="Fine-tune how the models process this stream."
+            >
+              <div className="bg-zinc-900/40 rounded-lg p-3 border border-zinc-800/50">
+                <ConfigRow label="Frame sampling rate" value={config.sample_every_n_frames} onChange={(v) => setConfig((c) => ({ ...c, sample_every_n_frames: parseInt(v) || 1 }))} />
+                <div className="mt-4">
+                  {!running ? (
+                    <button
+                      onClick={handleStart}
+                      className="w-full py-3 rounded-lg bg-white text-black text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
+                    >
+                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+                      Initialize Engine
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStop}
+                      className="w-full py-3 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all"
+                    >
+                      Kill Process
+                    </button>
+                  )}
+                </div>
               </div>
             </Section>
           </>
         )}
 
-        <Section title="Execution Log">
-          <div className="bg-[#0c0c0f] border border-zinc-800/60 rounded-lg p-2.5 font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto">
+        <Section 
+          title="Activity Timeline" 
+          icon={ICONS.history}
+          description="System sequence and processing lifecycle."
+        >
+          <div className="bg-black/40 border border-zinc-800/60 rounded-xl p-3 font-mono text-[9px] leading-relaxed max-h-60 overflow-y-auto">
             {logs.map((l, i) => (
-              <div key={i}>
+              <div key={i} className="mb-1 last:mb-0">
                 <span className="text-zinc-700">[{l.ts}]</span>{" "}
-                <span className={logColor(l.level)}>{l.level.toUpperCase()}</span>{" "}
+                <span className={`${logColor(l.level)} font-bold`}>{l.level[0]}</span>{" "}
                 <span className="text-zinc-500">{l.msg}</span>
               </div>
             ))}
-            {logs.length === 0 && <span className="text-zinc-700">Waiting for activity...</span>}
+            {logs.length === 0 && <span className="text-zinc-700 animate-pulse">Awaiting telemetry...</span>}
           </div>
         </Section>
       </div>
 
-      {/* Right: Video with canvas overlay */}
-      <div className="w-1/2 p-4 overflow-y-auto space-y-4">
-        <div className="flex items-center justify-between">
+      {/* Middle Column: Video Viewport */}
+      <div className="p-6 flex flex-col items-center justify-center bg-zinc-950/20 overflow-hidden relative">
+        <div className="flex items-center justify-between w-full max-w-4xl mb-4">
           <h3 className="text-xs font-semibold text-zinc-100">
             {running ? "Live Analysis" : analysisData ? "Analysis Complete" : "Video Preview"}
             {running && <span className="ml-2 text-[9px] text-red-400 animate-pulse">LIVE</span>}
@@ -564,9 +692,8 @@ function VideoAnalysis() {
           )}
         </div>
 
-        {/* Progress bar */}
         {running && progress && progress.total > 0 && (
-          <div className="h-0.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div className="w-full max-w-4xl h-0.5 bg-zinc-800 rounded-full overflow-hidden mb-4">
             <div
               className="h-full bg-blue-500 transition-all duration-300"
               style={{ width: `${Math.min(pct, 100)}%` }}
@@ -574,7 +701,7 @@ function VideoAnalysis() {
           </div>
         )}
 
-        <div className="relative bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
+        <div className="relative bg-black rounded-xl overflow-hidden shadow-2xl border border-zinc-800 aspect-video w-full max-w-4xl">
           {localUrl || video ? (
             <>
               <video
@@ -606,52 +733,64 @@ function VideoAnalysis() {
           )}
         </div>
 
-        {/* Playback position bar (driven by draw loop, no re-renders) */}
+        {/* Playback position bar */}
         {(running || analysisData) && (
-          <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+          <div className="w-full max-w-4xl h-1 bg-zinc-800 rounded-full overflow-hidden mt-4">
             <div ref={playbarRef} className="h-full bg-blue-500 transition-[width] duration-150" style={{ width: 0 }} />
           </div>
         )}
+      </div>
 
+      {/* Right Column: Results & Feedback */}
+      <div className="w-[350px] border-l border-zinc-800/60 p-5 overflow-y-auto shrink-0 bg-black/20 space-y-8">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-green-500/80 mb-1">Intelligence Panel</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Real-time inference outcomes</p>
+        </div>
+
+        <Section 
+          title="Compliance Banners" 
+          icon={ICONS.results}
+          description="High-visibility safety status summary."
+        >
+          <ComplianceList detections={currentDetections} overlays={overlays} />
+        </Section>
+        
         {analysisData && (
           <>
-            <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
-              <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
-              <ResultRow label="Frames analyzed" value={`${analysisData.frames_analyzed} / ${analysisData.frames_total}`} />
-              <ResultRow label="Video FPS" value={analysisData.fps} />
-              {summarizeResults(analysisData.results).map(({ key, count }) => (
-                <ResultRow key={key} label={`${key} detections`} value={`${count} frames`} variant={count > 0 ? "danger" : "ok"} />
-              ))}
-              {summarizeResults(analysisData.results).length === 0 && (
-                <ResultRow label="No detections" value="All clear" variant="ok" />
-              )}
-            </div>
+            <Section 
+              title="Statistical Metrics"
+              icon={ICONS.chart}
+              description="Aggregated data from the vision pipeline."
+            >
+              <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-xl p-4 space-y-1.5">
+                <ResultRow label="Frames analyzed" value={`${analysisData.frames_analyzed} / ${analysisData.frames_total}`} />
+                <ResultRow label="Video FPS" value={analysisData.fps} />
+                <div className="my-3 border-t border-zinc-800/50 pt-3" />
+                {summarizeResults(analysisData.results).map(({ key, count }) => (
+                  <ResultRow key={key} label={`${key}`} value={`${count} detections`} variant={count > 0 ? "danger" : "ok"} />
+                ))}
+              </div>
+            </Section>
 
-            <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
-              <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Per-Frame Results</h4>
-              <div className="max-h-48 overflow-y-auto space-y-1">
-                {analysisData.results.map((fr) => (
-                  <div key={fr.frame} className="flex items-center gap-2 text-[9px] py-1 border-b border-zinc-800/40">
-                    <span className="text-zinc-600 font-mono w-16 shrink-0">Frame {fr.frame}</span>
-                    <div className="flex gap-1 flex-wrap">
+            <Section 
+              title="Detection Pulse"
+              icon={ICONS.history}
+              description="Historical lookback of previous frames."
+            >
+              <div className="space-y-1.5">
+                {analysisData.results.slice(-20).reverse().map((fr) => (
+                  <div key={fr.frame} className="flex items-center gap-3 text-[9px] py-1.5 border-b border-zinc-800/30 group">
+                    <span className="text-zinc-600 font-mono w-14 shrink-0 group-hover:text-zinc-400 transition-colors">#{fr.frame}</span>
+                    <div className="flex gap-1.5 flex-wrap">
                       {Object.entries(fr.detections || {}).map(([key, det]) => (
-                        <span
-                          key={key}
-                          className={`px-1.5 py-0.5 rounded text-[8px] font-medium ${
-                            det.detected
-                              ? "bg-red-500/15 text-red-400"
-                              : "bg-green-500/10 text-green-500"
-                          }`}
-                        >
-                          {key}: {det.detected ? "detected" : "clear"}
-                          {det.confidence != null ? ` (${(det.confidence * 100).toFixed(0)}%)` : ""}
-                        </span>
+                        <div key={key} className={`w-1.5 h-1.5 rounded-full ${det.detected ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" : "bg-green-500/40"}`} title={key} />
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </Section>
           </>
         )}
       </div>
@@ -672,69 +811,364 @@ function findNearest(sortedFrames, target) {
 }
 
 // ============================================================
-// Live Camera Test
+// Live Webcam Analysis — browser camera stream
 // ============================================================
 
-function LiveCameraTest() {
-  const [cameras, setCameras] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+function LiveWebcamAnalysis() {
+  const [running, setRunning] = useState(false);
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
+  const [logs, setLogs] = useState([]);
+  const [currentDetections, setCurrentDetections] = useState(null);
+  
+  const videoRef = useRef();
+  const canvasRef = useRef();
+  const wsRef = useRef(null);
+  const streamRef = useRef(null);
+  const intervalRef = useRef(null);
+  const detectionRef = useRef(null);
 
-  useEffect(() => {
-    api.listCameras().then((data) => setCameras(data.results || data));
-  }, []);
+  function addLog(level, msg) {
+    const ts = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, { ts, level, msg }]);
+  }
+
+  async function handleStart() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws/webcam-analysis/`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        addLog("info", "Webcam WebSocket connected");
+        setRunning(true);
+        startStreaming();
+      };
+      
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === "detections") {
+          detectionRef.current = data.detections;
+          setCurrentDetections(data.detections);
+          
+          // Log detections periodically
+          const counts = Object.entries(data.detections || {}).map(([k, d]) => {
+            const num = d.payload?.boxes?.length || 0;
+            return num > 0 ? `${k}(${num})` : null;
+          }).filter(Boolean);
+          
+          if (counts.length > 0) {
+            addLog("ok", `Detections: ${counts.join(", ")}`);
+          }
+        }
+      };
+
+      ws.onclose = () => {
+        addLog("info", "Webcam WebSocket disconnected");
+        handleStop();
+      };
+
+    } catch (err) {
+      addLog("err", `Camera access failed: ${err.message}`);
+    }
+  }
+
+  function handleStop() {
+    setRunning(false);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (wsRef.current) wsRef.current.close();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+    }
+    detectionRef.current = null;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+  }
+
+  function startStreaming() {
+    intervalRef.current = setInterval(() => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      
+      const video = videoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0);
+      
+      const base64 = canvas.toDataURL("image/jpeg", 0.7);
+      wsRef.current.send(JSON.stringify({
+        frame: base64,
+        models: overlays
+      }));
+    }, 200); // ~5 FPS (Medium)
+    
+    requestAnimationFrame(drawLoop);
+  }
+
+  function drawLoop() {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const video = videoRef.current;
+
+    const rect = canvas.getBoundingClientRect();
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (detectionRef.current) {
+      const vW = video.videoWidth;
+      const vH = video.videoHeight;
+      const scale = Math.min(canvas.width / vW, canvas.height / vH);
+      const offX = (canvas.width - vW * scale) / 2;
+      const offY = (canvas.height - vH * scale) / 2;
+      const tx = (x) => offX + x * scale;
+      const ty = (y) => offY + y * scale;
+
+      const hudLines = [];
+
+      for (const [key, det] of Object.entries(detectionRef.current)) {
+        if (!overlays.includes(key)) continue;
+        if (det.status !== "ok") continue;
+        
+        // Draw HUD status (optional debug, keeping clean for now as per user request for banners)
+      }
+    }
+    if (streamRef.current?.active) requestAnimationFrame(drawLoop);
+  }
 
   function toggleOverlay(key) {
     setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
   return (
-    <div className="p-5 space-y-4">
-      <Section title="Select Camera">
-        <div className="flex gap-2 flex-wrap">
-          {cameras.map((cam) => (
-            <button
-              key={cam.id}
-              onClick={() => setSelectedId(cam.id)}
-              className={`px-3 py-1.5 rounded-lg border text-[10px] ${
-                selectedId === cam.id
-                  ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                  : "text-zinc-500 border-zinc-800"
-              }`}
-            >
-              {cam.name}
+    <div className="grid grid-cols-[320px_1fr_350px] h-full overflow-hidden">
+      {/* Left Column: Controls */}
+      <div className="w-[320px] border-r border-zinc-800/60 p-5 space-y-8 overflow-y-auto shrink-0 bg-black/20">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-500/80 mb-1">Configuration Hub</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Input parameters and model selection</p>
+        </div>
+
+        <Section 
+          title="Webcam Control" 
+          icon={ICONS.activity}
+          description="Manage local device camera streams."
+        >
+          {!running ? (
+            <button onClick={handleStart} className="w-full py-3 rounded-lg bg-blue-500 text-white text-[10px] font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors">
+              Start Webcam Feed
             </button>
-          ))}
+          ) : (
+            <button onClick={handleStop} className="w-full py-3 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all">
+              Terminate Stream
+            </button>
+          )}
+        </Section>
+        <Section 
+          title="Intelligence Layers" 
+          icon={ICONS.layers}
+          description="Enable vision models for real-time inference."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {ALL_MODELS.map((key) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer bg-zinc-900/30 p-2 rounded-lg border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+                <span className={`text-[9px] font-bold uppercase tracking-tighter ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key.replace('_', ' ')}</span>
+              </label>
+            ))}
+          </div>
+        </Section>
+        <Section 
+          title="Activity Timeline" 
+          icon={ICONS.history}
+          description="System sequence and processing lifecycle."
+        >
+           <div className="bg-[#0c0c0f] border border-zinc-800/60 rounded-xl p-3 font-mono text-[9px] max-h-60 overflow-y-auto">
+            {logs.map((l, i) => (
+              <div key={i} className="mb-1 last:mb-0">
+                <span className="text-zinc-700">[{l.ts}]</span>{" "}
+                <span className={`${logColor(l.level)} font-bold`}>{l.level[0]}</span>{" "}
+                <span className="text-zinc-500">{l.msg}</span>
+              </div>
+            ))}
+            {logs.length === 0 && <span className="text-zinc-700 animate-pulse">Awaiting telemetry...</span>}
+          </div>
+        </Section>
+      </div>
+
+      {/* Middle Column: Visual Viewport */}
+      <div className="flex-1 p-6 flex flex-col items-center justify-center bg-zinc-950/20 overflow-hidden relative">
+        <div className="relative bg-black rounded-xl overflow-hidden shadow-2xl border border-zinc-800 aspect-video w-full max-w-4xl group">
+          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain opacity-50" />
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-10" />
+          
+          {running && (
+            <button 
+              onClick={handleStop}
+              className="absolute top-4 right-4 z-20 px-4 py-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-widest rounded-lg backdrop-blur-md transition-all duration-300 opacity-0 group-hover:opacity-100 shadow-xl"
+            >
+              Stop Live Web Cam
+            </button>
+          )}
+
+          {!running && (
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm">
+              <span className="text-zinc-500 text-xs">Camera inactive</span>
+            </div>
+          )}
         </div>
-      </Section>
-      <Section title="Overlays">
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {ALL_MODELS.map((key) => (
-            <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-              <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
-              <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
-            </label>
-          ))}
+      </div>
+
+      {/* Right Column: Outcomes */}
+      <div className="w-[350px] border-l border-zinc-800/60 p-5 overflow-y-auto shrink-0 bg-black/20 space-y-8">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-green-500/80 mb-1">Intelligence Panel</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Real-time inference outcomes</p>
         </div>
-      </Section>
-      {selectedId && <LiveCameraPreview cameraId={selectedId} overlays={overlays} />}
+
+        <Section 
+          title="Compliance Banners" 
+          icon={ICONS.results}
+          description="High-visibility safety status summary."
+        >
+          <ComplianceList detections={currentDetections} overlays={overlays} />
+        </Section>
+      </div>
     </div>
   );
 }
 
-function LiveCameraPreview({ cameraId, overlays }) {
-  const { src, status } = useCameraStream(cameraId, overlays);
+// ============================================================
+// Image Analysis — static file upload
+// ============================================================
+
+function ImageAnalysis() {
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [results, setResults] = useState(null);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
+  
+  const canvasRef = useRef();
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImage(file);
+    setPreview(URL.createObjectURL(file));
+    setResults(null);
+  }
+
+  async function handleAnalyze() {
+    if (!image) return;
+    setAnalyzing(true);
+    try {
+      const data = await api.analyzeImage(image, overlays);
+      setResults(data.detections);
+      drawResults(data.detections);
+    } catch (err) {
+      alert("Analysis failed: " + err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  function drawResults(detections) {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    img.src = preview;
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      const tx = (x) => x;
+      const ty = (y) => y;
+
+      for (const [key, det] of Object.entries(detections)) {
+        if (!overlays.includes(key)) continue;
+        if (det.status !== "ok") continue;
+        if (key === "fatigue") drawFatigue(ctx, det.payload, tx, ty, 1);
+        else drawPPEBoxes(ctx, det.payload, key, tx, ty, 1);
+      }
+    };
+  }
+
   return (
-    <div className="bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden relative">
-      {src ? (
-        <img src={src} alt="Live test" className="w-full h-full object-contain" />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-[10px] text-zinc-600">
-            {status === "connecting" ? "Connecting..." : "No signal"}
-          </span>
+    <div className="grid grid-cols-[320px_1fr_350px] h-full overflow-hidden">
+      {/* Left Column: Controls */}
+      <div className="border-r border-zinc-800/60 p-5 space-y-8 overflow-y-auto shrink-0 bg-black/20">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-500/80 mb-1">Configuration Hub</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Input parameters and model selection</p>
         </div>
-      )}
+
+        <Section 
+          title="Upload Image" 
+          icon={ICONS.upload}
+          description="Analyze a static capture for safety compliance."
+        >
+          <input type="file" onChange={handleFile} className="text-[10px] text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:bg-zinc-800 file:text-zinc-300 hover:file:bg-zinc-700 cursor-pointer w-full" />
+          {preview && (
+            <button 
+              disabled={analyzing}
+              onClick={handleAnalyze} 
+              className="mt-3 w-full py-2.5 rounded-lg bg-blue-500 text-white text-[10px] font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-colors disabled:opacity-50"
+            >
+              {analyzing ? "Synthesizing..." : "Run AI Analysis"}
+            </button>
+          )}
+        </Section>
+        <Section 
+          title="Intelligence Layers" 
+          icon={ICONS.layers}
+          description="Enable vision models for batch inference."
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {ALL_MODELS.map((key) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer bg-zinc-900/30 p-2 rounded-lg border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                <Toggle enabled={overlays.includes(key)} onChange={() => setOverlays(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key])} size="sm" />
+                <span className={`text-[9px] font-bold uppercase tracking-tighter ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key.replace('_', ' ')}</span>
+              </label>
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      {/* Middle Column: Viewport */}
+      <div className="flex-1 p-6 relative flex flex-col items-center justify-center bg-zinc-950/20 overflow-hidden">
+        {preview ? (
+          <div className="relative max-w-full max-h-full overflow-auto shadow-2xl border border-zinc-800 rounded-lg">
+            <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} />
+          </div>
+        ) : (
+          <span className="text-zinc-600 text-xs text-center px-10 leading-relaxed uppercase tracking-widest">No image selected. Please upload to begin analysis.</span>
+        )}
+      </div>
+
+      {/* Right Column: Outcomes */}
+      <div className="w-[350px] border-l border-zinc-800/60 p-5 overflow-y-auto shrink-0 bg-black/20 space-y-8">
+        <div className="mb-6">
+           <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-green-500/80 mb-1">Intelligence Panel</h2>
+           <p className="text-[9px] text-zinc-600 font-medium">Real-time inference outcomes</p>
+        </div>
+
+        <Section 
+          title="Compliance Banners" 
+          icon={ICONS.results}
+          description="High-visibility safety status summary."
+        >
+          <ComplianceList detections={results} overlays={overlays} />
+        </Section>
+      </div>
     </div>
   );
 }
@@ -836,14 +1270,33 @@ function MiniStat({ label, value, good }) {
 // Shared sub-components
 // ============================================================
 
-function Section({ title, children }) {
+function Section({ title, description, children, icon }) {
   return (
-    <div>
-      <h3 className="text-xs font-semibold text-zinc-100 mb-2.5">{title}</h3>
-      {children}
+    <div className="group/section mb-8 last:mb-0">
+      <div className="flex items-center gap-2 mb-2">
+        {icon && <span className="text-zinc-500 group-hover/section:text-blue-400 transition-colors">{icon}</span>}
+        <h4 className="text-[10px] uppercase tracking-widest font-bold text-zinc-200">{title}</h4>
+      </div>
+      {description && (
+        <p className="text-[9px] text-zinc-500 leading-relaxed mb-4 pr-4 font-medium uppercase tracking-tighter opacity-80 border-l border-zinc-800 pl-2">
+          {description}
+        </p>
+      )}
+      <div className="relative">
+        {children}
+      </div>
     </div>
   );
 }
+
+const ICONS = {
+  upload: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
+  layers: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>,
+  activity: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+  results: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  chart: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+  history: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+};
 
 function ConfigRow({ label, value, onChange }) {
   return (

@@ -32,13 +32,7 @@ def camera_models_view(request, camera_id, model_key=None):
     override, _ = CameraModel.objects.get_or_create(camera=camera, model_setting=model_setting)
     is_enabled = request.data.get('enabled', request.data.get('is_enabled'))
     if is_enabled is not None:
-        requested_enabled = bool(is_enabled)
-        if requested_enabled and not model_setting.is_enabled:
-            return Response(
-                {'error': f'Model "{model_key}" is globally disabled and cannot be enabled per camera.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        override.is_enabled = requested_enabled
+        override.is_enabled = bool(is_enabled)
         override.save()
     return Response(CameraModelSerializer(override).data)
 

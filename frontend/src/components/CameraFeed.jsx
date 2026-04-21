@@ -1,33 +1,8 @@
 import Badge from "./Badge";
 import useCameraStream from "../hooks/useCameraStream";
 
-export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = null, isDeleting = false, streamDisabled = false, inference = null }) {
-  const { src, status } = useCameraStream(streamDisabled ? null : camera.id, overlays);
-  const inferenceStatus = inference?.status || "unknown";
-  const aiLabel = streamDisabled
-    ? "AI DEMO"
-    : inferenceStatus === "running"
-      ? "AI RUNNING"
-      : inferenceStatus === "loading"
-        ? "AI LOADING"
-        : inferenceStatus === "disabled"
-          ? "AI DISABLED"
-          : inferenceStatus === "stale"
-            ? "AI STALE"
-            : inferenceStatus === "error"
-              ? "AI ERROR"
-              : "AI UNKNOWN";
-  const aiClass = streamDisabled
-    ? "text-amber-300"
-    : inferenceStatus === "running"
-      ? "text-emerald-300"
-      : inferenceStatus === "loading"
-        ? "text-blue-300"
-        : inferenceStatus === "disabled"
-          ? "text-zinc-400"
-          : inferenceStatus === "error"
-            ? "text-red-300"
-            : "text-amber-300";
+export default function CameraFeed({ camera, isHero = false, onClick, onDelete, badges = [], overlays = [], isDeleting = false }) {
+  const { src, status } = useCameraStream(camera.id, overlays);
 
   return (
     <div
@@ -50,7 +25,7 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
             <circle cx="12" cy="13" r="4" />
           </svg>
           <span className="text-[10px] text-zinc-600">
-            {streamDisabled ? "Unavailable on Hugging Face demo" : status === "connecting" ? "Connecting..." : "No signal"}
+            {status === "connecting" ? "Connecting..." : "No signal"}
           </span>
         </div>
       )}
@@ -67,7 +42,6 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
       <div className="absolute top-2.5 left-3 right-3 flex justify-between items-center z-10">
         <span className="text-[10px] font-semibold text-zinc-400">{camera.name}{camera.location ? ` — ${camera.location}` : ""}</span>
         <div className="flex items-center gap-2">
-          <span className={`text-[8px] font-semibold ${aiClass}`}>{aiLabel}</span>
           {onDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); if (!isDeleting) onDelete(); }}
@@ -85,9 +59,9 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
             </button>
           )}
           <div className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${streamDisabled ? "bg-amber-500" : status === "live" ? "bg-red-500 animate-pulse-dot" : status === "connecting" ? "bg-amber-500 animate-pulse" : "bg-zinc-600"}`} />
-            <span className={`text-[8px] font-semibold ${streamDisabled ? "text-amber-400" : status === "live" ? "text-red-500" : status === "connecting" ? "text-amber-500" : "text-zinc-600"}`}>
-              {streamDisabled ? "DEMO" : status === "live" ? "LIVE" : status === "connecting" ? "..." : "OFFLINE"}
+            <span className={`w-1.5 h-1.5 rounded-full ${status === "live" ? "bg-red-500 animate-pulse-dot" : status === "connecting" ? "bg-amber-500 animate-pulse" : "bg-zinc-600"}`} />
+            <span className={`text-[8px] font-semibold ${status === "live" ? "text-red-500" : status === "connecting" ? "text-amber-500" : "text-zinc-600"}`}>
+              {status === "live" ? "LIVE" : status === "connecting" ? "..." : "OFFLINE"}
             </span>
           </div>
         </div>
@@ -99,21 +73,7 @@ export default function CameraFeed({ camera, isHero = false, onClick, onDelete, 
           {badges.map((b, i) => (
             <Badge key={i} variant={b.variant}>{b.label}</Badge>
           ))}
-          {badges.length === 0 && status === "live" && (
-            <Badge variant={inferenceStatus === "running" ? "success" : inferenceStatus === "error" ? "danger" : "muted"}>
-              {inferenceStatus === "running"
-                ? "Inference running"
-                : inferenceStatus === "loading"
-                  ? "Models loading"
-                  : inferenceStatus === "disabled"
-                    ? "Inference disabled"
-                    : inferenceStatus === "stale"
-                      ? "Inference stale"
-                      : inferenceStatus === "error"
-                        ? "Inference error"
-                        : "Inference unknown"}
-            </Badge>
-          )}
+          {badges.length === 0 && status === "live" && <Badge variant="success">All clear</Badge>}
         </div>
       </div>
     </div>

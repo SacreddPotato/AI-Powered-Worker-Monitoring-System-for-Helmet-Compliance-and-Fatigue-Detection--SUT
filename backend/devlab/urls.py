@@ -8,4 +8,5 @@ urlpatterns = [
     path('dev/videos/<int:video_id>/analyze/', views.video_analyze, name='dev-video-analyze'),
     path('dev/thresholds/', views.thresholds_view, name='dev-thresholds'),
     path('dev/performance/', views.performance_view, name='dev-performance'),
+    path('dev/analyze-image/', views.analyze_image, name='dev-analyze-image'),
 ]

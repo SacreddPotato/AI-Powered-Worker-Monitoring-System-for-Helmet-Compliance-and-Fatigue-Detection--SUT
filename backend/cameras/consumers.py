@@ -13,7 +13,6 @@ Server sends binary JPEG frames continuously until the client disconnects.
 """
 import json
 import logging
-import os
 import threading
 import time
 
@@ -21,11 +20,6 @@ import cv2
 from channels.generic.websocket import WebsocketConsumer
 
 logger = logging.getLogger(__name__)
-
-STREAM_FPS = max(8, int(os.environ.get("CAMERA_STREAM_FPS", "16")))
-STREAM_FRAME_DELAY = 1.0 / STREAM_FPS
-STREAM_JPEG_QUALITY = min(95, max(40, int(os.environ.get("CAMERA_STREAM_JPEG_QUALITY", "65"))))
-INFERENCE_INTERVAL_MS = max(80, int(os.environ.get("CAMERA_INFERENCE_INTERVAL_MS", "260")))
 
 
 class CameraStreamConsumer(WebsocketConsumer):
@@ -35,17 +29,13 @@ class CameraStreamConsumer(WebsocketConsumer):
         self.camera_id = int(self.scope["url_route"]["kwargs"]["camera_id"])
         self._running = False
         self._thread = None
-        self._overlays = None  # None = all overlays; set() = specific models
+        self._overlays = None  # None = no annotation; set() = specific models
         self.accept()
-        from .inference_status import mark_loading
-        mark_loading(self.camera_id)
-        # Start streaming immediately
+        # Start streaming immediately with no overlays
         self._start_stream()
 
     def disconnect(self, close_code):
         self._running = False
-        from .inference_status import mark_stream_stopped
-        mark_stream_stopped(self.camera_id)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=3)
 
@@ -114,21 +104,21 @@ class CameraStreamConsumer(WebsocketConsumer):
                         continue
                     consecutive_failures = 0
 
-                    # Always run annotator if available. Overlay selection is handled inside draw_annotations.
-                    if annotator is not None:
+                    # Run annotation if overlays are configured
+                    if self._overlays is not None and annotator is not None:
                         try:
                             frame = annotator(frame)
                         except Exception:
                             logger.exception("Annotation error on camera %s", self.camera_id)
 
-                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, STREAM_JPEG_QUALITY])
+                    _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     if jpeg is None:
                         continue
                     if not self._safe_send_bytes(jpeg.tobytes()):
                         return  # client disconnected
 
-                    # Throttle to a stable FPS so encode/send does not overwhelm the event loop.
-                    time.sleep(STREAM_FRAME_DELAY)
+                    # Throttle to ~25 FPS to avoid overwhelming the WS
+                    time.sleep(0.04)
             finally:
                 capture.release()
 
@@ -155,11 +145,19 @@ class CameraStreamConsumer(WebsocketConsumer):
     def _make_annotator(self):
         """Build the annotation closure (same logic as views._make_annotator
         but driven by self._overlays which can change at runtime)."""
-        from detection.services import get_inference_service, get_effective_enabled_model_keys
+        from detection.services import get_inference_service
+        from detection.models import ModelSetting, CameraModel
         from alerts.services import create_alert_from_inference
         from annotation import draw_annotations
         from .models import Camera
-        from .inference_status import mark_loading, mark_disabled, mark_running, mark_error
+
+        # Resolve enabled models for this camera
+        enabled = set(ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True))
+        for ov in CameraModel.objects.filter(camera_id=self.camera_id):
+            if ov.is_enabled:
+                enabled.add(ov.model_setting_id)
+            else:
+                enabled.discard(ov.model_setting_id)
 
         svc = get_inference_service()
         camera = Camera.objects.filter(pk=self.camera_id).first()
@@ -167,91 +165,25 @@ class CameraStreamConsumer(WebsocketConsumer):
             threading.Thread(target=svc.preload, daemon=True).start()
 
         cached = {}
-        state_lock = threading.Lock()
-        inference_inflight = {"value": False}
-        last_inference_ts = {"value": 0.0}
-        heartbeat_counter = {"value": 0}
-        inference_interval_seconds = INFERENCE_INTERVAL_MS / 1000.0
-        LOG_EVERY_N_INFERENCE_CYCLES = 12
-
-        def run_inference_cycle(frame_snapshot):
-            try:
-                if not svc.ready:
-                    mark_loading(self.camera_id)
-                    return
-
-                enabled = get_effective_enabled_model_keys(self.camera_id)
-                if not enabled:
-                    with state_lock:
-                        cached.clear()
-                        last_inference_ts["value"] = time.monotonic()
-                    mark_disabled(self.camera_id)
-                    return
-
-                new = {}
-                for key in enabled:
-                    new[key] = svc.run_inference_on_frame(key, frame_snapshot, camera_id=self.camera_id)
-
-                if camera is not None:
-                    for key, result in new.items():
-                        create_alert_from_inference(camera=camera, model_key=key, result=result)
-
-                detected_count = sum(1 for item in new.values() if bool(item.get("detected")))
-                with state_lock:
-                    cached.clear()
-                    cached.update(new)
-                    heartbeat_counter["value"] += 1
-                    last_inference_ts["value"] = time.monotonic()
-
-                mark_running(self.camera_id, model_keys=enabled, detected_count=detected_count)
-
-                if heartbeat_counter["value"] % LOG_EVERY_N_INFERENCE_CYCLES == 0:
-                    logger.info(
-                        "Inference heartbeat camera=%s models=%s detections=%s overlays=%s interval_ms=%s",
-                        self.camera_id,
-                        sorted(enabled),
-                        detected_count,
-                        sorted(self._overlays) if self._overlays else "all",
-                        INFERENCE_INTERVAL_MS,
-                    )
-            except Exception:
-                mark_error(self.camera_id, "inference_exception")
-                logger.exception("Inference exception on camera %s", self.camera_id)
-            finally:
-                with state_lock:
-                    inference_inflight["value"] = False
+        counter = [0]
+        INFERENCE_INTERVAL = 5
 
         def annotate(frame):
             if not svc.ready:
-                mark_loading(self.camera_id)
                 return frame
-
-            now = time.monotonic()
-            should_launch = False
-            with state_lock:
-                due = (now - last_inference_ts["value"]) >= inference_interval_seconds
-                if due and not inference_inflight["value"]:
-                    inference_inflight["value"] = True
-                    should_launch = True
-
-            if should_launch:
-                threading.Thread(
-                    target=run_inference_cycle,
-                    args=(frame.copy(),),
-                    daemon=True,
-                ).start()
-
-            with state_lock:
-                cached_snapshot = dict(cached)
-
-            if not cached_snapshot:
-                return frame
-
+            counter[0] += 1
             try:
-                return draw_annotations(frame, cached_snapshot, enabled_overlays=self._overlays)
+                if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
+                    new = {}
+                    for key in enabled:
+                        new[key] = svc.run_inference_on_frame(key, frame, camera_id=self.camera_id)
+                    if camera is not None:
+                        for key, result in new.items():
+                            create_alert_from_inference(camera=camera, model_key=key, result=result)
+                    cached.clear()
+                    cached.update(new)
+                return draw_annotations(frame, cached, enabled_overlays=self._overlays)
             except Exception:
-                mark_error(self.camera_id, "annotation_exception")
-                logger.exception("Annotation exception on camera %s", self.camera_id)
                 return frame
 
         return annotate

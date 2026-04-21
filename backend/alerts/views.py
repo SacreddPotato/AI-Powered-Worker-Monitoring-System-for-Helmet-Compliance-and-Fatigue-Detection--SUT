@@ -1,9 +1,8 @@
 from django.utils import timezone
 from django.http import HttpResponse
 from django.utils.dateparse import parse_date, parse_datetime
-from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
@@ -12,90 +11,8 @@ from datetime import datetime, time, timedelta
 import csv
 from io import StringIO
 import re
-from cameras.models import Camera
-from detection.models import ModelSetting
-from .models import Alert, CameraAlertSeverity
+from .models import Alert
 from .serializers import AlertSerializer
-from .services import SEVERITY_MAP
-
-VALID_SEVERITIES = {'high', 'medium', 'low'}
-
-
-@api_view(['GET'])
-def alert_severity_matrix_view(request):
-    model_keys = list(ModelSetting.objects.order_by('key').values_list('key', flat=True))
-    if not model_keys:
-        model_keys = sorted(SEVERITY_MAP.keys())
-
-    defaults = {key: SEVERITY_MAP.get(key, 'low') for key in model_keys}
-    camera_rows = list(Camera.objects.order_by('id').values('id', 'name'))
-
-    matrix = {
-        row['id']: {key: defaults[key] for key in model_keys}
-        for row in camera_rows
-    }
-
-    overrides = CameraAlertSeverity.objects.filter(camera_id__in=matrix.keys(), model_key__in=model_keys)
-    for override in overrides:
-        matrix.setdefault(override.camera_id, {})[override.model_key] = override.severity
-
-    return Response({
-        'model_keys': model_keys,
-        'defaults': defaults,
-        'matrix': matrix,
-        'cameras': camera_rows,
-    })
-
-
-@api_view(['PUT'])
-def camera_alert_severity_view(request, camera_id, model_key):
-    camera = get_object_or_404(Camera, pk=camera_id)
-    if not ModelSetting.objects.filter(key=model_key).exists():
-        return Response({'error': f'Unknown model key: {model_key}'}, status=status.HTTP_400_BAD_REQUEST)
-
-    severity = str(request.data.get('severity', '')).strip().lower()
-    if severity not in VALID_SEVERITIES:
-        return Response({'error': 'severity must be one of high|medium|low'}, status=status.HTTP_400_BAD_REQUEST)
-
-    override, _ = CameraAlertSeverity.objects.get_or_create(
-        camera=camera,
-        model_key=model_key,
-        defaults={'severity': severity},
-    )
-    override.severity = severity
-    override.save()
-
-    return Response({'camera': camera.id, 'model_key': model_key, 'severity': severity})
-
-
-@api_view(['POST'])
-def apply_global_alert_severity_override_view(request):
-    severities = request.data.get('severities')
-    if not isinstance(severities, dict) or not severities:
-        return Response({'error': 'Payload must include non-empty severities object'}, status=status.HTTP_400_BAD_REQUEST)
-
-    valid_model_keys = set(ModelSetting.objects.values_list('key', flat=True))
-    updates = []
-    for model_key, raw_severity in severities.items():
-        severity = str(raw_severity).strip().lower()
-        if model_key not in valid_model_keys:
-            return Response({'error': f'Unknown model key: {model_key}'}, status=status.HTTP_400_BAD_REQUEST)
-        if severity not in VALID_SEVERITIES:
-            return Response({'error': f'severity for {model_key} must be one of high|medium|low'}, status=status.HTTP_400_BAD_REQUEST)
-        updates.append((model_key, severity))
-
-    camera_ids = list(Camera.objects.values_list('id', flat=True))
-    updated_count = 0
-    for camera_id in camera_ids:
-        for model_key, severity in updates:
-            CameraAlertSeverity.objects.update_or_create(
-                camera_id=camera_id,
-                model_key=model_key,
-                defaults={'severity': severity},
-            )
-            updated_count += 1
-
-    return Response({'updated': updated_count, 'camera_count': len(camera_ids), 'model_count': len(updates)})
 
 class AlertViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Alert.objects.select_related('camera', 'detection').all()

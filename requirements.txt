@@ -16,4 +16,4 @@ pillow
 huggingface-hub
 psutil
 openpyxl
-mediapipe==0.10.30
+mediapipe>=0.10.30

@@ -32,7 +32,6 @@ except Exception as mediapipe_import_error:  # pragma: no cover
 _LEFT_EYE_LANDMARKS = [33, 133, 159, 145, 153, 144, 163, 7]
 _RIGHT_EYE_LANDMARKS = [362, 263, 386, 374, 380, 381, 382, 398]
 _FEATURE_MISSING_CONFIDENCE = 0.7
-_PERSON_FALLBACK_MISSING_CONFIDENCE = 0.72
 
 
 def decode_base64_image(image_base64: str):
@@ -102,6 +101,12 @@ def _normalize_label(label: str) -> str:
     return label
 
 
+def _is_garbage_label(label: str) -> bool:
+    """Filter out labels that are clearly invalid or placeholder names."""
+    normalized = _normalize_label(label)
+    return normalized in ("", ".", "-", "_", "none", "null", "n/a", "unknown")
+
+
 def _is_missing_label(label: str) -> bool:
     normalized = _normalize_label(label)
     return normalized.startswith("no ") or normalized.startswith("without ")
@@ -119,19 +124,15 @@ class PPEModelAdapter:
             _normalize_label(label) for label in model_info.get("target_labels", [])
         }
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
+        self.conf_threshold = float(model_info.get("conf_threshold", 0.35))
         self.supports_qr = model_key == "vest"
         self._absence_uses_features = model_key in {"gloves", "goggles"}
-        self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
-        self.person_model_path = model_info.get("person_model_path")
-        self.person_download_urls = model_info.get("person_download_urls", [])
 
         self.available = False
         self.load_error = None
         self.download_error = None
         self.downloaded = False
         self._model = None
-        self._person_model = None
-        self._supports_explicit_missing_classes = False
         self._mp_hands = None
         self._mp_face_mesh = None
         self._feature_lock = threading.Lock()
@@ -187,9 +188,6 @@ class PPEModelAdapter:
                     self.matched_labels = list(self.model_classes)
             else:
                 self.matched_labels = list(self.model_classes)
-            self._supports_explicit_missing_classes = any(
-                _is_missing_label(label) for label in self.matched_labels
-            )
             self.available = True
 
             if self._absence_uses_features:
@@ -213,9 +211,6 @@ class PPEModelAdapter:
                             min_detection_confidence=0.35,
                             min_tracking_confidence=0.35,
                         )
-
-            if self._absence_uses_person_overlap:
-                self._load_person_model_for_absence()
         except Exception as exc:
             self.available = False
             self.load_error = str(exc)
@@ -288,42 +283,6 @@ class PPEModelAdapter:
                 out.append(right_bbox)
         return out
 
-    def _load_person_model_for_absence(self):
-        if self._person_model is not None:
-            return
-        if not self.person_model_path:
-            self.load_error = (
-                f"{self.load_error}; " if self.load_error else ""
-            ) + "Person fallback disabled: person model path not configured"
-            return
-        if not os.path.exists(self.person_model_path):
-            person_error = _download_any(self.person_download_urls, self.person_model_path)
-            if person_error:
-                self.load_error = (
-                    f"{self.load_error}; " if self.load_error else ""
-                ) + f"Person fallback model download failed: {person_error}"
-                return
-            self.downloaded = True
-        try:
-            self._person_model = YOLO(self.person_model_path)
-        except Exception as exc:
-            self.load_error = (
-                f"{self.load_error}; " if self.load_error else ""
-            ) + f"Person fallback model load failed: {exc}"
-
-    def _detect_person_regions(self, frame):
-        if self._person_model is None:
-            return []
-        try:
-            person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
-            out = []
-            for box in person_results[0].boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                out.append((x1, y1, x2, y2, float(box.conf[0])))
-            return out
-        except Exception:
-            return []
-
     def _extract_qr(self, frame, boxes) -> str:
         if self._qr_detector is None or len(boxes) == 0:
             return ""
@@ -358,9 +317,19 @@ class PPEModelAdapter:
             }
 
         try:
-            results = self._model(frame, conf=0.35, verbose=False)
+            results = self._model(frame, conf=self.conf_threshold, verbose=False)
             boxes = results[0].boxes
-            names = results[0].names or {}
+            names = self._model.names or {}
+            
+            # DEBUG: Print all raw detections before filtering
+            raw_detections = []
+            for box in boxes:
+                cid = int(box.cls[0])
+                cname = names.get(cid, "unknown")
+                raw_detections.append(f"{cname}({float(box.conf[0]):.2f})")
+            if raw_detections:
+                print(f"[DEBUG] Model {self.model_key} raw: {', '.join(raw_detections)}")
+
             selected_confidences = []
             selected_boxes = []
             selected_box_coords = []
@@ -371,6 +340,9 @@ class PPEModelAdapter:
                 class_id = int(box.cls[0]) if box.cls is not None else -1
                 class_name = str(names.get(class_id, "")).lower()
                 normalized_class_name = _normalize_label(class_name)
+                # Skip garbage / placeholder class names (e.g. '.' in face_shield model)
+                if _is_garbage_label(class_name):
+                    continue
                 if self.normalized_target_labels and normalized_class_name not in self.normalized_target_labels:
                     continue
                 selected_boxes.append(box)
@@ -402,10 +374,6 @@ class PPEModelAdapter:
             feature_count = 0
             feature_missing_count = 0
             feature_missing_confidences = []
-            person_count = 0
-            person_missing_count = 0
-            person_missing_confidences = []
-            used_person_overlap_fallback = False
 
             if self._absence_uses_features:
                 feature_boxes = self._detect_feature_regions(frame)
@@ -437,76 +405,22 @@ class PPEModelAdapter:
                             }
                         )
 
-            explicit_missing_from_model = len(missing_confidences)
-            should_run_person_fallback = (
-                self._absence_uses_person_overlap
-                and (
-                    not self._supports_explicit_missing_classes
-                    or explicit_missing_from_model == 0
-                )
-            )
-
-            if should_run_person_fallback:
-                person_boxes = self._detect_person_regions(frame)
-                person_count = len(person_boxes)
-                if person_boxes:
-                    used_person_overlap_fallback = True
-                ppe_present_boxes = [
-                    (b["x1"], b["y1"], b["x2"], b["y2"])
-                    for b in annotation_boxes
-                    if b["color"] == "green"
-                ]
-
-                for px1, py1, px2, py2, pconf in person_boxes:
-                    person_box = (px1, py1, px2, py2)
-                    has_ppe = any(
-                        _box_center_inside(ppe_box, person_box) or _iou(person_box, ppe_box) > 0.03
-                        for ppe_box in ppe_present_boxes
-                    )
-                    if not has_ppe:
-                        person_missing_count += 1
-                        person_missing_confidences.append(
-                            max(float(pconf), _PERSON_FALLBACK_MISSING_CONFIDENCE)
-                        )
-                        annotation_boxes.append(
-                            {
-                                "x1": int(px1),
-                                "y1": int(py1),
-                                "x2": int(px2),
-                                "y2": int(py2),
-                                "label": f"no {self.model_key}",
-                                "color": "red",
-                            }
-                        )
-
             explicit_missing_count = len([b for b in annotation_boxes if b["color"] == "red"])
-            missing_count = max(explicit_missing_count, feature_missing_count, person_missing_count)
+            missing_count = max(explicit_missing_count, feature_missing_count)
             detected = missing_count > 0
             confidence = (
-                max(missing_confidences + feature_missing_confidences + person_missing_confidences, default=0.0)
+                max(missing_confidences + feature_missing_confidences, default=0.0)
                 if detected
                 else max(selected_confidences, default=0.0)
             )
-
-            if self._absence_uses_features:
-                absence_detector = "mediapipe"
-            elif self._supports_explicit_missing_classes and used_person_overlap_fallback:
-                absence_detector = "model_labels+person_overlap_fallback"
-            elif used_person_overlap_fallback:
-                absence_detector = "person_overlap_fallback"
-            else:
-                absence_detector = "model_labels"
-
             payload = {
                 "count": count,
                 "missing_count": missing_count,
                 "feature_count": feature_count,
                 "feature_missing_count": feature_missing_count,
-                "person_count": person_count if person_count else feature_count,
-                "person_missing_count": person_missing_count if person_count else feature_missing_count,
-                "absence_detector": absence_detector,
-                "supports_explicit_missing_classes": bool(self._supports_explicit_missing_classes),
-                "used_person_overlap_fallback": bool(used_person_overlap_fallback),
+                "person_count": feature_count,
+                "person_missing_count": feature_missing_count,
+                "absence_detector": "mediapipe" if self._absence_uses_features else "model_labels",
                 "ok_count": len([b for b in annotation_boxes if b["color"] == "green"]),
                 "boxes": annotation_boxes,
                 "classification": (
@@ -537,11 +451,13 @@ class PPEModelAdapter:
             }
 
 
-class HelmetModelAdapter(PPEModelAdapter):
+class PersonAnchoredModelAdapter(PPEModelAdapter):
     def __init__(self, model_key: str, model_info: Dict):
         self.person_model_path = model_info.get("person_model_path")
         self.person_download_urls = model_info.get("person_download_urls", [])
         self._person_model = None
+        # Head tracking vs full body tracking based on PPE type
+        self._head_only = model_key in ("helmet", "face_shield", "goggles")
         super().__init__(model_key, model_info)
 
     def _load(self):
@@ -576,47 +492,63 @@ class HelmetModelAdapter(PPEModelAdapter):
                 "status": "unavailable",
                 "detected": False,
                 "confidence": 0.0,
-                "payload": {"message": "Helmet/person model pipeline unavailable", "load_error": self.load_error},
+                "payload": {"message": f"{self.display_name} / person model pipeline unavailable", "load_error": self.load_error},
             }
 
         try:
-            helmet_results = self._model(frame, conf=0.35, verbose=False)
+            target_results = self._model(frame, conf=self.conf_threshold, verbose=False)
             person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
-            helmet_boxes = [
-                tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),)
-                for box in helmet_results[0].boxes
-            ]
+            target_names = self._model.names or {}
+            
+            target_boxes = []
+            for box in target_results[0].boxes:
+                cid = int(box.cls[0])
+                cname = _normalize_label(target_names.get(cid, ""))
+                coords = tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),)
+                # Ensure the detected label is actually one of our target labels
+                if not self.normalized_target_labels or cname in self.normalized_target_labels:
+                    target_boxes.append(coords)
+
             person_boxes = [
                 tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),)
                 for box in person_results[0].boxes
             ]
 
-            no_helmet_conf = []
+            no_target_conf = []
             missing_boxes = []
             for px1, py1, px2, py2, pconf in person_boxes:
-                has_helmet = False
+                has_target = False
                 person_box = (px1, py1, px2, py2)
                 head_region = (px1, py1, px2, py1 + int(max(1, (py2 - py1) * 0.38)))
-                for hx1, hy1, hx2, hy2, _ in helmet_boxes:
-                    helmet_box = (hx1, hy1, hx2, hy2)
-                    if _iou(person_box, helmet_box) > 0.02 or _iou(head_region, helmet_box) > 0.08:
-                        has_helmet = True
-                        break
-                if not has_helmet:
-                    no_helmet_conf.append(float(pconf))
+                
+                for tx1, ty1, tx2, ty2, _ in target_boxes:
+                    t_box = (tx1, ty1, tx2, ty2)
+                    if self._head_only:
+                        if _iou(person_box, t_box) > 0.02 or _iou(head_region, t_box) > 0.08:
+                            has_target = True
+                            break
+                    else:
+                        # Full body PPE must overlap significantly with the person
+                        if _iou(person_box, t_box) > 0.15:
+                            has_target = True
+                            break
+
+                if not has_target:
+                    no_target_conf.append(float(pconf))
                     missing_boxes.append((px1, py1, px2, py2))
 
-            no_helmet_count = len(no_helmet_conf)
-            confidence = max(no_helmet_conf) if no_helmet_conf else 0.0
+            no_target_count = len(no_target_conf)
+            confidence = max(no_target_conf) if no_target_conf else 0.0
+            
             annotation_boxes = []
-            for hx1, hy1, hx2, hy2, _ in helmet_boxes:
+            for tx1, ty1, tx2, ty2, _ in target_boxes:
                 annotation_boxes.append(
                     {
-                        "x1": int(hx1),
-                        "y1": int(hy1),
-                        "x2": int(hx2),
-                        "y2": int(hy2),
-                        "label": "helmet",
+                        "x1": int(tx1),
+                        "y1": int(ty1),
+                        "x2": int(tx2),
+                        "y2": int(ty2),
+                        "label": self.model_key.replace('_', ' '),
                         "color": "green",
                     }
                 )
@@ -638,19 +570,36 @@ class HelmetModelAdapter(PPEModelAdapter):
                         "y1": int(my1),
                         "x2": int(mx2),
                         "y2": int(my2),
-                        "label": "helmet missing",
+                        "label": f"{self.model_key.replace('_', ' ')} missing",
                         "color": "red",
                     }
                 )
+            # If no person detected in frame, can't determine PPE compliance
+            if len(person_boxes) == 0:
+                return {
+                    "status": "no_person",
+                    "detected": False,
+                    "confidence": 0.0,
+                    "payload": {
+                        "person_count": 0,
+                        "target_count": len(target_boxes),
+                        "no_target_count": 0,
+                        "classification": "no_person",
+                        "camera_id": camera_id,
+                        "boxes": annotation_boxes,
+                    },
+                }
+
             return {
                 "status": "ok",
-                "detected": no_helmet_count > 0,
+                # detected=True means HAZARD: someone is missing the target PPE
+                "detected": no_target_count > 0,
                 "confidence": round(confidence, 4),
                 "payload": {
                     "person_count": len(person_boxes),
-                    "helmet_count": len(helmet_boxes),
-                    "no_helmet_count": no_helmet_count,
-                    "classification": "helmet_missing" if no_helmet_count > 0 else "helmet_ok",
+                    "target_count": len(target_boxes),
+                    "no_target_count": no_target_count,
+                    "classification": f"missing" if no_target_count > 0 else "ok",
                     "camera_id": camera_id,
                     "boxes": annotation_boxes,
                 },
@@ -748,8 +697,7 @@ class FatigueModelAdapter:
                 }
 
             previous = self._fatigue_consecutive_by_camera.get(camera_id, 0)
-            forced_fatigue_state = bool(analysis.get("forced_fatigue_state"))
-            if analysis["is_fatigued"] or forced_fatigue_state:
+            if analysis["is_fatigued"]:
                 previous += 1
             else:
                 previous = 0
@@ -757,12 +705,10 @@ class FatigueModelAdapter:
 
             sustained_fatigue = previous >= FATIGUE_CONSECUTIVE_FRAMES_THRESHOLD
             head_tilt_exceeded = bool(analysis["head_tilt_exceeded"])
-            # Forced fatigue (hard eye closure) triggers immediately; otherwise sustained hybrid fatigue.
-            detected = forced_fatigue_state or sustained_fatigue
+            # Classification driven by hybrid formula; head tilt is informational only
+            detected = sustained_fatigue
 
             reason = []
-            if forced_fatigue_state:
-                reason.append("forced_eye_closure")
             if sustained_fatigue:
                 reason.append("sustained_fatigue")
             if head_tilt_exceeded:
@@ -797,8 +743,8 @@ class InferenceService:
     def __init__(self, model_definitions: Dict):
         self._adapters = {}
         for model_key, model_info in model_definitions.items():
-            if model_key == "helmet":
-                adapter = HelmetModelAdapter(model_key, model_info)
+            if model_key in ("helmet", "face_shield", "safety_suit"):
+                adapter = PersonAnchoredModelAdapter(model_key, model_info)
             elif model_key == "fatigue":
                 adapter = FatigueModelAdapter(model_key, model_info)
             else:

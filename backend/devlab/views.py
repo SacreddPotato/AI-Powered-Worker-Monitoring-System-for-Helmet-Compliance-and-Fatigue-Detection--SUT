@@ -66,13 +66,16 @@ def video_stream(request, video_id):
 
     def generate():
         from annotation import draw_annotations
-        from detection.services import get_globally_enabled_model_keys
+        from detection.models import ModelSetting
 
         cap = cv2.VideoCapture(video.file_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
         frame_delay = 1.0 / min(fps, 30)
 
         overlay_set = set(filter(None, overlays.split(','))) if overlays else None
+        enabled = set(
+            ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True)
+        ) if annotated else set()
 
         # Kick off model loading in background so raw frames stream immediately
         svc = get_inference_service() if annotated else None
@@ -80,7 +83,6 @@ def video_stream(request, video_id):
             threading.Thread(target=svc.preload, daemon=True).start()
 
         cached = {}
-        enabled = set()
         frame_idx = 0
         INFER_EVERY = 3
 
@@ -93,20 +95,15 @@ def video_stream(request, video_id):
 
             display = frame
 
-            if annotated and svc and svc.ready:
+            if annotated and svc and svc.ready and enabled:
                 try:
                     if frame_idx % INFER_EVERY == 0 or not cached:
-                        enabled = get_globally_enabled_model_keys()
-                        if enabled:
-                            new = {}
-                            for key in enabled:
-                                new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
-                            cached.clear()
-                            cached.update(new)
-                        else:
-                            cached.clear()
-                    if enabled and cached:
-                        display = draw_annotations(frame, cached, enabled_overlays=overlay_set)
+                        new = {}
+                        for key in enabled:
+                            new[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
+                        cached.clear()
+                        cached.update(new)
+                    display = draw_annotations(frame, cached, enabled_overlays=overlay_set)
                 except Exception:
                     pass
 
@@ -148,8 +145,8 @@ def video_analyze(request, video_id):
         if not ret:
             break
         if frame_idx % sample_every == 0:
-            from detection.services import get_globally_enabled_model_keys
-            enabled = get_globally_enabled_model_keys()
+            from detection.models import ModelSetting
+            enabled = ModelSetting.objects.filter(is_enabled=True).values_list('key', flat=True)
             frame_results = {}
             for key in enabled:
                 result = svc.run_inference_on_frame(key, frame, camera_id=0)
@@ -250,4 +247,37 @@ def performance_view(request):
         'cpu_percent': psutil.cpu_percent(interval=0),
         'memory_mb': round(mem.rss / 1024 / 1024, 1),
         **gpu,
+    })
+
+
+@api_view(['POST'])
+def analyze_image(request):
+    """Run all specified models on a single uploaded image."""
+    image_file = request.FILES.get('image')
+    models = request.data.get('models', '').split(',')
+    
+    if not image_file:
+        return Response({'error': 'No image provided'}, status=400)
+    
+    # Read image
+    import numpy as np
+    nparr = np.frombuffer(image_file.read(), np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    if frame is None:
+        return Response({'error': 'Could not decode image'}, status=400)
+    
+    svc = get_inference_service()
+    if not svc.ready:
+        threading.Thread(target=svc.preload, daemon=True).start()
+        return Response({'error': 'Models are still loading... please try again in a few seconds'}, status=503)
+        
+    results = {}
+    for key in models:
+        if not key.strip(): continue
+        results[key.strip()] = svc.run_inference_on_frame(key.strip(), frame, camera_id=0)
+        
+    return Response({
+        'status': 'ok',
+        'detections': results
     })

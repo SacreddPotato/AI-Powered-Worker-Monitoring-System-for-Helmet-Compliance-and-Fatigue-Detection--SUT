@@ -2,91 +2,34 @@ import { useState, useEffect } from "react";
 import { api } from "../api";
 import CameraFeed from "../components/CameraFeed";
 import AlertCard from "../components/AlertCard";
-import LoadingCircle from "../components/LoadingCircle";
+import Toggle from "../components/Toggle";
 
-function isHuggingFaceHost() {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname.toLowerCase();
-  return host === "huggingface.co" || host.endsWith(".huggingface.co") || host === "hf.space" || host.endsWith(".hf.space");
-}
+const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles", "face_shield", "safety_suit"];
 
 export default function FeedsPage() {
   const [cameras, setCameras] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [inferenceByCamera, setInferenceByCamera] = useState({});
   const [heroId, setHeroId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [deletingIds, setDeletingIds] = useState([]);
-  const [hfNoticeDismissed, setHfNoticeDismissed] = useState(false);
-  const [nowMs, setNowMs] = useState(Date.now());
-  const [pageLoading, setPageLoading] = useState(true);
-  const hostedOnHuggingFace = isHuggingFaceHost();
-  const showFullscreenHfNotice = hostedOnHuggingFace && !hfNoticeDismissed;
 
   function loadCameras() {
-    return api.listCameras().then((data) => {
+    api.listCameras().then((data) => {
       const list = data.results || data;
       setCameras(list);
       if (list.length > 0 && !heroId) setHeroId(list[0].id);
-      return list;
-    });
-  }
-
-  function refreshInferenceStatus(cameraList) {
-    if (hostedOnHuggingFace || !cameraList?.length) {
-      setInferenceByCamera({});
-      return Promise.resolve();
-    }
-
-    return Promise.all(
-      cameraList.map((cam) =>
-        api
-          .cameraInferenceStatus(cam.id)
-          .then((status) => [cam.id, status])
-          .catch(() => [cam.id, { camera_id: cam.id, status: "error" }])
-      )
-    ).then((entries) => {
-      setInferenceByCamera(Object.fromEntries(entries));
     });
   }
 
   useEffect(() => {
-    let active = true;
-    setPageLoading(true);
-    Promise.all([
-      loadCameras().then((list) => refreshInferenceStatus(list)),
-      api.listAlerts({ status: "open", limit: 20 }).then((data) => {
-        if (!active) return;
-        setAlerts(data.results || data);
-      }),
-    ]).finally(() => {
-      if (active) setPageLoading(false);
+    loadCameras();
+    api.listAlerts({ status: "open", limit: 20 }).then((data) => {
+      setAlerts(data.results || data);
     });
     const interval = setInterval(() => {
-      api.listAlerts({ status: "open", limit: 20 }).then((data) => {
-        if (!active) return;
-        setAlerts(data.results || data);
-      });
+      api.listAlerts({ status: "open", limit: 20 }).then((data) => setAlerts(data.results || data));
     }, 5000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (hostedOnHuggingFace || cameras.length === 0) {
-      setInferenceByCamera({});
-      return;
-    }
-    const interval = setInterval(() => {
-      refreshInferenceStatus(cameras);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [hostedOnHuggingFace, cameras]);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -125,12 +68,47 @@ export default function FeedsPage() {
     }
   }
 
+  function toggleOverlay(key) {
+    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
+  async function handleAcknowledge(id) {
+    // Optimistic update: remove from local state immediately
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await api.acknowledgeAlert(id);
+    } catch (err) {
+      console.error("Failed to acknowledge alert:", err);
+      // Optional: Re-fetch or toast error
+    }
+  }
+
+  async function handleClearAll() {
+    const ids = alerts.map((a) => a.id);
+    if (ids.length === 0) return;
+    
+    // Clear state immediately for best snappy feel
+    setAlerts([]);
+    try {
+      // Clear all in background
+      await Promise.all(ids.map((id) => api.acknowledgeAlert(id)));
+    } catch (err) {
+      console.error("Failed to clear all alerts:", err);
+      loadAlerts(); // Re-fetch on total failure
+    }
+  }
+
+  function loadAlerts() {
+    api.listAlerts({ status: "open", limit: 20 }).then((data) => {
+      setAlerts(data.results || data);
+    });
+  }
+
   const hero = cameras.find((c) => c.id === heroId);
   const others = cameras.filter((c) => c.id !== heroId);
 
   const grouped = { high: [], medium: [], low: [] };
   alerts.forEach((a) => (grouped[a.severity] || grouped.low).push(a));
-  const runningInferenceCount = cameras.filter((c) => inferenceByCamera[c.id]?.status === "running").length;
 
   return (
     <>
@@ -148,67 +126,26 @@ export default function FeedsPage() {
             Add Camera
           </button>
           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-full px-3 py-1">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                cameras.length === 0
-                  ? "bg-zinc-500"
-                  : hostedOnHuggingFace
-                    ? "bg-amber-500"
-                    : runningInferenceCount > 0
-                      ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,.5)]"
-                      : "bg-amber-500 animate-pulse"
-              }`}
-            />
-            {cameras.length === 0
-              ? "No cameras"
-              : hostedOnHuggingFace
-                ? "Demo mode"
-                : `AI ${runningInferenceCount}/${cameras.length} running`}
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_6px_rgba(34,197,94,.5)]" />
+            {cameras.length > 0 ? "Systems online" : "No cameras"}
           </div>
         </div>
       </div>
 
-      {hostedOnHuggingFace && hfNoticeDismissed && (
-        <div className="mx-5 mt-3 mb-1 border border-amber-500/30 bg-amber-500/10 rounded-lg px-3 py-2.5">
-          <p className="text-[11px] text-amber-300 font-medium">Camera streaming is unavailable on Hugging Face-hosted demos.</p>
-          <p className="text-[10px] text-amber-200/80 mt-0.5">To use live camera feeds, run this project locally and open the local URL.</p>
+      {/* Overlay toggle bar */}
+      {cameras.length > 0 && (
+        <div className="px-5 py-2 border-b border-zinc-800/60 flex items-center gap-4 shrink-0">
+          <span className="text-[9px] text-zinc-600 uppercase tracking-wider">Overlays</span>
+          {ALL_MODELS.map((key) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+              <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+              <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+            </label>
+          ))}
         </div>
       )}
 
-      {showFullscreenHfNotice && (
-        <div className="flex-1 px-5 py-5">
-          <div className="h-full border border-amber-500/30 bg-amber-500/10 rounded-xl flex flex-col items-center justify-center text-center px-6">
-            <div className="w-11 h-11 rounded-full border border-amber-400/40 bg-amber-500/15 flex items-center justify-center text-amber-300 mb-4">
-              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M12 9v4" />
-                <path d="M12 17h.01" />
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              </svg>
-            </div>
-            <h2 className="text-base font-semibold text-amber-200 mb-2">Camera feeds are unavailable on this Hugging Face demo URL</h2>
-            <p className="text-[11px] text-amber-100/85 max-w-xl leading-relaxed mb-5">
-              Browser and host restrictions prevent direct camera access and reliable live stream transport in this hosted environment.
-              Run the project locally to use real camera feeds.
-            </p>
-            <button
-              onClick={() => setHfNoticeDismissed(true)}
-              className="text-[10px] font-semibold text-amber-200 bg-amber-500/15 border border-amber-400/40 rounded-lg px-4 py-2 hover:bg-amber-500/20 transition-colors"
-            >
-              Dismiss and continue
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!showFullscreenHfNotice && pageLoading && (
-        <div className="flex-1 px-5 py-5">
-          <div className="h-full border border-zinc-800 rounded-xl bg-surface-alt/50">
-            <LoadingCircle label="Loading feeds..." />
-          </div>
-        </div>
-      )}
-
-      {!showFullscreenHfNotice && !pageLoading && <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden">
         {/* Camera grid */}
         <div className="flex-1 p-3 overflow-auto">
           {cameras.length === 0 ? (
@@ -233,9 +170,8 @@ export default function FeedsPage() {
                 <CameraFeed
                   camera={hero}
                   isHero
-                  inference={inferenceByCamera[hero.id]}
-                  streamDisabled={hostedOnHuggingFace}
-                  badges={getBadges(alerts, hero.id, nowMs)}
+                  overlays={overlays}
+                  badges={getBadges(alerts, hero.id)}
                   isDeleting={deletingIds.includes(hero.id)}
                   onDelete={() => handleDeleteCamera(hero.id)}
                 />
@@ -244,10 +180,9 @@ export default function FeedsPage() {
                 <CameraFeed
                   key={cam.id}
                   camera={cam}
-                  inference={inferenceByCamera[cam.id]}
-                  streamDisabled={hostedOnHuggingFace}
+                  overlays={overlays}
                   onClick={() => setHeroId(cam.id)}
-                  badges={getBadges(alerts, cam.id, nowMs)}
+                  badges={getBadges(alerts, cam.id)}
                   isDeleting={deletingIds.includes(cam.id)}
                   onDelete={() => handleDeleteCamera(cam.id)}
                 />
@@ -256,34 +191,67 @@ export default function FeedsPage() {
           )}
         </div>
 
-        {/* Alert sidebar */}
-        <div className="w-[280px] bg-[#0c0c0f] border-l border-zinc-800/60 flex flex-col shrink-0">
-          <div className="px-3.5 py-3 border-b border-zinc-800/60 flex justify-between items-center">
-            <span className="text-xs font-semibold text-zinc-400">Alerts</span>
-            <span className="text-[9px] font-semibold bg-red-500/15 text-red-500 px-2 py-0.5 rounded-full">
-              {alerts.length} active
-            </span>
+        {/* Right Sidebar: Models & Alerts */}
+        <div className="w-[300px] bg-[#0c0c0f] border-l border-zinc-800/60 flex flex-col shrink-0 overflow-hidden">
+          {/* Top Half: Engine Toggles */}
+          <div className="flex-none p-4 border-b border-zinc-800/60 bg-black/40">
+            <h2 className="text-[10px] uppercase tracking-[0.2em] font-black text-blue-500/80 mb-3">Intelligence Layers</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {ALL_MODELS.map((key) => (
+                <label key={key} className="flex items-center justify-between gap-1 cursor-pointer bg-zinc-900/40 px-2.5 py-2 rounded-md border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                  <span className={`text-[9px] font-bold uppercase tracking-tighter ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>
+                    {key.replace('_', ' ')}
+                  </span>
+                  <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+                </label>
+              ))}
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-2.5 py-2">
+
+          {/* Bottom Half: Live Queue (Alerts) */}
+          <div className="flex-none px-4 py-3 border-b border-zinc-800/60 flex justify-between items-center bg-zinc-950">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Live Violations</span>
+              {alerts.length > 0 && (
+                <span className="text-[9px] font-bold bg-red-500/10 text-red-500/80 px-2 py-0.5 rounded-full border border-red-500/20">
+                  {alerts.length}
+                </span>
+              )}
+            </div>
+            {alerts.length > 0 && (
+              <button 
+                onClick={handleClearAll}
+                className="text-[9px] font-bold text-zinc-500 hover:text-zinc-200 transition-colors uppercase tracking-tight"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#101014]">
             {["high", "medium", "low"].map(
               (sev) =>
                 grouped[sev].length > 0 && (
                   <div key={sev}>
-                    <div className="text-[8px] text-zinc-600 uppercase tracking-widest px-1 py-1.5">
-                      {sev === "high" ? "Critical" : sev === "medium" ? "Warning" : "Info"}
+                    <div className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1 py-1.5 mb-1">
+                      {sev === "high" ? "Critical Priority" : sev === "medium" ? "Warning" : "Info"}
                     </div>
                     {grouped[sev].map((alert) => (
-                      <AlertCard key={alert.id} alert={alert} compact />
+                      <AlertCard 
+                        key={alert.id} 
+                        alert={alert} 
+                        compact 
+                        onAcknowledge={handleAcknowledge}
+                      />
                     ))}
                   </div>
                 )
             )}
             {alerts.length === 0 && (
-              <div className="text-[10px] text-zinc-700 text-center py-8">No active alerts</div>
+              <div className="text-[10px] text-zinc-700 text-center py-8">No active violations detected.</div>
             )}
           </div>
         </div>
-      </div>}
+      </div>
 
       {showAdd && <AddCameraDialog onClose={() => setShowAdd(false)} onSubmit={handleAddCamera} />}
     </>
@@ -375,7 +343,7 @@ function AddCameraDialog({ onClose, onSubmit }) {
               {scanning ? "Scanning..." : "Rescan"}
             </button>
           </div>
-          {devices.length > 0 ? (
+          {devices.length > 0 || !scanning ? (
             <div className="space-y-1.5">
               {devices.map((d) => (
                 <div key={d.index} className="flex items-center justify-between bg-surface-alt border border-zinc-800 rounded-lg px-3 py-2">
@@ -391,10 +359,24 @@ function AddCameraDialog({ onClose, onSubmit }) {
                   </button>
                 </div>
               ))}
+              {devices.length === 0 && !scanning && (
+                <div className="flex items-center justify-between bg-surface-alt border border-zinc-800 rounded-lg px-3 py-2">
+                  <div>
+                    <div className="text-[10px] pl-1 font-bold text-zinc-300">Local Laptop Camera (Fallback)</div>
+                    <div className="text-[9px] pl-1 text-zinc-600">Index 0 &middot; Default Device</div>
+                  </div>
+                  <button
+                    onClick={() => onSubmit({ name: "Local Webcam", source_url: "0", location: "Local Device" })}
+                    className="text-[9px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/25 rounded px-2 py-1 hover:bg-blue-500/20 shadow-lg shadow-blue-500/10"
+                  >
+                    Quick Add
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-[10px] text-zinc-700 bg-surface-alt border border-zinc-800 rounded-lg px-3 py-3 text-center">
-              {scanning ? "Scanning for devices..." : "No local video devices found"}
+              Scanning for hardware devices...
             </div>
           )}
         </div>
@@ -495,40 +477,13 @@ function FormField({ label, placeholder, value, onChange, required }) {
   );
 }
 
-function getBadges(alerts, cameraId, nowMs) {
-  const byType = {};
-
-  alerts
-    .filter((alert) => alert.camera === cameraId)
-    .forEach((alert) => {
-      const existing = byType[alert.model_key];
-      const createdTs = Date.parse(alert.created_at || "") || 0;
-      const existingTs = existing ? existing._createdTs : -1;
-      if (!existing || createdTs > existingTs) {
-        byType[alert.model_key] = { ...alert, _createdTs: createdTs };
-      }
-    });
-
-  return Object.values(byType).map((alert) => {
-    const elapsedSeconds = Math.max(0, Math.floor((nowMs - alert._createdTs) / 1000));
-    const typeLabel = modelTypeLabel(alert.model_key);
-    return {
-      variant: alert.severity === "high" ? "danger" : alert.severity === "medium" ? "warning" : "info",
-      label: `${typeLabel} · ${elapsedSeconds}s`,
-    };
-  });
-}
-
-function modelTypeLabel(key) {
-  const labels = {
-    helmet: "Helmet",
-    fatigue: "Fatigue",
-    vest: "Vest",
-    gloves: "Gloves",
-    goggles: "Goggles",
-    boots: "Boots",
-    faceshield: "Face Shield",
-    safetysuit: "Safety Suit",
-  };
-  return labels[key] || String(key || "Alert").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function getBadges(alerts, cameraId) {
+  const camAlerts = alerts.filter((a) => a.camera === cameraId);
+  // Deduplicate by message to keep the video feed neat
+  const uniqueAlerts = Array.from(new Map(camAlerts.map(a => [a.message, a])).values());
+  
+  return uniqueAlerts.map((a) => ({
+    variant: a.severity === "high" ? "danger" : a.severity === "medium" ? "warning" : "info",
+    label: a.message,
+  }));
 }

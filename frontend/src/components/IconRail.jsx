@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 
 const icons = {
   feeds: (
@@ -23,11 +23,10 @@ const icons = {
       <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
     </svg>
   ),
-  overview: (
+  home: (
     <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 10.5L12 3l9 7.5" />
-      <path d="M5.5 9.5V20h13V9.5" />
-      <path d="M10 20v-5h4v5" />
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
     </svg>
   ),
 };
@@ -39,26 +38,17 @@ const navItems = [
   { to: "/devlab", icon: "devlab", label: "Dev Lab" },
 ];
 
-const overviewItem = { to: "/", icon: "overview", label: "Project Overview" };
-
-export default function IconRail({ alertCount = 0, currentPath = "", onNavigateStart }) {
+export default function IconRail({ alertCount = 0 }) {
   return (
-    <nav className="w-14 bg-[#0c0c0f] border-r border-zinc-800/60 flex flex-col items-center py-3 gap-1.5 shrink-0">
-      <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-800 mb-4 bg-zinc-900">
-        <img
-          src="/images/assets/logo.jpg"
-          alt="SafeVision AI"
-          className="w-full h-full object-cover"
-        />
+    <nav className="w-14 bg-[#0d0914] border-r border-purple-900/20 flex flex-col items-center py-3 gap-1.5 shrink-0">
+      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-500 rounded-lg flex items-center justify-center mb-4">
+        <span className="text-white text-sm font-bold">S</span>
       </div>
-      <div className="flex flex-col items-center gap-1.5 w-full flex-1">
+      <div className="flex-1 flex flex-col gap-1.5">
         {navItems.map(({ to, icon, label }) => (
           <NavLink
             key={to}
             to={to}
-            onClick={() => {
-              if (to !== currentPath) onNavigateStart?.(to);
-            }}
             className={({ isActive }) =>
               `w-9 h-9 rounded-lg flex items-center justify-center relative transition-colors ${
                 isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]"
@@ -68,27 +58,18 @@ export default function IconRail({ alertCount = 0, currentPath = "", onNavigateS
           >
             {icons[icon]}
             {icon === "alerts" && alertCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0c0c0f] animate-pulse-dot" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0d0914] animate-pulse-dot" />
             )}
           </NavLink>
         ))}
-
-        <NavLink
-          key={overviewItem.to}
-          to={overviewItem.to}
-          onClick={() => {
-            if (overviewItem.to !== currentPath) onNavigateStart?.(overviewItem.to);
-          }}
-          className={({ isActive }) =>
-            `w-9 h-9 rounded-lg flex items-center justify-center relative transition-colors mt-auto ${
-              isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-600 hover:text-zinc-400 hover:bg-white/[0.03]"
-            }`
-          }
-          title={overviewItem.label}
-        >
-          {icons[overviewItem.icon]}
-        </NavLink>
       </div>
+      <Link
+        to="/"
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-600 hover:text-zinc-100 hover:bg-white/[0.03] transition-colors mt-auto mb-2"
+        title="Return to Home"
+      >
+        {icons.home}
+      </Link>
     </nav>
   );
 }
