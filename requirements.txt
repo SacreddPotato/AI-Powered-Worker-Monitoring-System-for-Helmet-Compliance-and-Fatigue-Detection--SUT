@@ -13,7 +13,6 @@ scipy
 imutils
 werkzeug
 pillow
-huggingface-hub
 psutil
 openpyxl
 mediapipe==0.10.30

@@ -53,10 +53,7 @@ frontend/dist/
 # Local cache artifacts
 .cache/
 
-# ML model weights (downloaded at runtime)
-backend/ml_models/*.pt
-backend/ml_models/*.pth
-backend/ml_models/*.dat
+# ML model weights are versioned via Git LFS (see .gitattributes)
 
 # Brainstorming artifacts
 .superpowers/
