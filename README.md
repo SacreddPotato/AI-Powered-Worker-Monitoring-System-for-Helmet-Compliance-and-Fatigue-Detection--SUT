@@ -28,21 +28,21 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 ```
 ┌────────────────────────────────────────────────────────┐
 │  React SPA (Vite + Tailwind CSS v4)                    │
-│  ┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐           │
-│  │Feeds │ │ Alerts │ │ Models │ │ Dev Lab │           │
-│  └──┬───┘ └───┬────┘ └───┬────┘ └────┬────┘           │
-│     │    REST  │  WebSocket│     REST  │               │
+│  ┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐            │
+│  │Feeds │ │ Alerts │ │ Models │ │ Dev Lab │            │
+│  └──┬───┘ └───┬────┘ └───┬────┘ └────┬────┘            │
+│     │    REST │  WebSocket│      REST │                │
 └─────┼──────────┼──────────┼───────────┼────────────────┘
       │          │          │           │
 ┌─────┼──────────┼──────────┼───────────┼────────────────┐
 │  Django (DRF + Channels via Daphne ASGI)               │
-│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────┐         │
-│  │ cameras │ │ alerts │ │detection │ │devlab│         │
-│  └────┬────┘ └───┬────┘ └─────┬────┘ └──┬───┘         │
+│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────┐          │
+│  │ cameras │ │ alerts │ │detection │ │devlab│          │
+│  └────┬────┘ └───┬────┘ └─────┬────┘ └──┬───┘          │
 │       │          │            │          │             │
 │  ┌────┴──────────┴────────────┴──────────┴───────────┐ │
 │  │  ML Services (camera, inference, fatigue engine)  │ │
-│  │  YOLOv8 · Swin Transformer · dlib landmarks       │ │
+│  │  YOLOv8 · Swin Transformer · mediapipe landmarks  │ │
 │  └───────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────┘
 ```
@@ -51,7 +51,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 **Frontend:** React 18 + Vite + Tailwind CSS v4 — "Tactical HUD" dark theme with DM Sans / JetBrains Mono typography
 
-**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), with auto-download from HuggingFace
+**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), mediapioe facial mesh landmarks (EAR/MAR)
 
 **Server:** Daphne (ASGI) serving both HTTP and WebSocket on a single port
 
@@ -69,7 +69,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 - Python 3.10+
 - Node.js 18+ (for frontend build)
-- Conda (recommended, required for dlib)
+- Conda (recommended for version control)
 
 ### Python Dependencies
 
@@ -84,7 +84,7 @@ ultralytics
 torch
 torchvision
 numpy
-dlib
+mediapipe==0.10.14
 scipy
 imutils
 werkzeug
@@ -106,10 +106,9 @@ Managed via `frontend/package.json` — React 18, Vite, Tailwind CSS v4, React R
 git clone <repo-url>
 cd AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT
 
-# Create conda environment (recommended for dlib)
+# Create conda environment
 conda create -n fatigue_env python=3.10 -y
 conda activate fatigue_env
-conda install -c conda-forge dlib -y
 
 pip install -r requirements.txt
 ```
@@ -176,7 +175,7 @@ docker build -t worker-monitor .
 docker run -p 7860:7860 worker-monitor
 ```
 
-The Dockerfile uses Miniconda, installs dlib via conda, builds the frontend, and runs Daphne on port 7860.
+The Dockerfile uses Miniconda, builds the frontend, and runs Daphne on port 7860.
 
 ## API Reference
 
@@ -224,7 +223,7 @@ backend/
 ├── devlab/             # Video upload, analysis, threshold tuning
 ├── camera_service.py   # OpenCV camera capture service
 ├── inference_service.py# ML inference orchestrator
-├── fatigue_engine.py   # Swin + dlib fatigue scoring
+├── fatigue_engine.py   # Swin + mediapipe fatigue scoring
 ├── model_service.py    # Model loading + HuggingFace download
 ├── alerts_service.py   # Alert creation logic
 ├── config.py           # Runtime configuration
