@@ -17,6 +17,10 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [react(), tailwindcss()],
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/setupTests.js",
+  },
   server: {
     port: 5173,
     proxy: {

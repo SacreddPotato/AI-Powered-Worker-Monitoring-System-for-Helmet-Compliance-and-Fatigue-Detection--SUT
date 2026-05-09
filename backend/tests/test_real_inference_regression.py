@@ -1,6 +1,7 @@
 import pytest
 
 from conftest import EXPECTED_MODEL_KEYS
+from scripts.snapshot_models import verify_snapshot
 
 
 @pytest.mark.ml
@@ -25,6 +26,7 @@ def test_all_configured_models_have_weights(real_inference_service):
 
 @pytest.fixture(scope="session")
 def real_inference_service():
+    verify_snapshot()
     from config import MODEL_DEFINITIONS
     from inference_service import InferenceService
 

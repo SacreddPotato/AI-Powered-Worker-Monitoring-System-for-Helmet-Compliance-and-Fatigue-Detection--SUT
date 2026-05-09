@@ -1,0 +1,138 @@
+{
+  "artifacts": [
+    {
+      "lfs_oid": "2811645c56e0c469bdca537dbe3075385f2c35f9411c47afb44903cf86fca1a9",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "helmet"
+        }
+      ],
+      "path": "backend/ml_models/best.pt",
+      "sha256": "2811645c56e0c469bdca537dbe3075385f2c35f9411c47afb44903cf86fca1a9",
+      "size_bytes": 6231786
+    },
+    {
+      "lfs_oid": "11fa19f2aea79bc960d680a13f82f22105982b325eb9e17a4a5e1a9f8245980a",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "boots"
+        }
+      ],
+      "path": "backend/ml_models/boots_detection.pt",
+      "sha256": "11fa19f2aea79bc960d680a13f82f22105982b325eb9e17a4a5e1a9f8245980a",
+      "size_bytes": 5563076
+    },
+    {
+      "lfs_oid": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "model_key_refs": [
+        {
+          "field": "face_landmarker_path",
+          "model_key": "fatigue"
+        }
+      ],
+      "path": "backend/ml_models/face_landmarker.task",
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "size_bytes": 3758596
+    },
+    {
+      "lfs_oid": "2744e94556a8a0ab7b1bd2a62b5ca8d48a0ddc5ff5f8ed182db0a17a64eba47d",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "faceshield"
+        }
+      ],
+      "path": "backend/ml_models/faceshield_detection.pt",
+      "sha256": "2744e94556a8a0ab7b1bd2a62b5ca8d48a0ddc5ff5f8ed182db0a17a64eba47d",
+      "size_bytes": 6219946
+    },
+    {
+      "lfs_oid": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "gloves"
+        }
+      ],
+      "path": "backend/ml_models/gloves_detection.pt",
+      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "size_bytes": 5625014
+    },
+    {
+      "lfs_oid": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "goggles"
+        }
+      ],
+      "path": "backend/ml_models/goggles_detection.pt",
+      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "size_bytes": 5625014
+    },
+    {
+      "lfs_oid": "7a31fb543f66ab46c03731e168595713ad91b3add2851d9898f2fbfb27d22877",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "safetysuit"
+        }
+      ],
+      "path": "backend/ml_models/safety_suit_detection.pt",
+      "sha256": "7a31fb543f66ab46c03731e168595713ad91b3add2851d9898f2fbfb27d22877",
+      "size_bytes": 22482346
+    },
+    {
+      "lfs_oid": "b16e57eec14d24ce7b9219444ec2011bce908b3d04b0821fe53908e66715c86f",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "fatigue"
+        }
+      ],
+      "path": "backend/ml_models/swin_best.pth",
+      "sha256": "b16e57eec14d24ce7b9219444ec2011bce908b3d04b0821fe53908e66715c86f",
+      "size_bytes": 196862987
+    },
+    {
+      "lfs_oid": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "model_key_refs": [
+        {
+          "field": "weights_path",
+          "model_key": "vest"
+        }
+      ],
+      "path": "backend/ml_models/vest_detection.pt",
+      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
+      "size_bytes": 5625014
+    },
+    {
+      "lfs_oid": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+      "model_key_refs": [
+        {
+          "field": "person_model_path",
+          "model_key": "faceshield"
+        },
+        {
+          "field": "person_model_path",
+          "model_key": "helmet"
+        },
+        {
+          "field": "person_model_path",
+          "model_key": "safetysuit"
+        },
+        {
+          "field": "person_model_path",
+          "model_key": "vest"
+        }
+      ],
+      "path": "backend/ml_models/yolov8n.pt",
+      "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+      "size_bytes": 6549796
+    }
+  ],
+  "generated_by": "scripts/snapshot_models.py",
+  "schema_version": 1
+}

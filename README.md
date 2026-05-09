@@ -215,6 +215,18 @@ Model weights are stored in `backend/ml_models/`. CI-critical weights are tracke
 - `FACESHIELD_MODEL_URL`
 - `SAFETY_SUIT_MODEL_URL`
 
+`backend/ml_models/model_snapshot.json` pins the exact model artifact snapshot used by regression tests. Regenerate it after intentional model changes:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py write
+```
+
+Verify the committed snapshot without starting the app:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py verify
+```
+
 ## Project Structure
 
 ```
