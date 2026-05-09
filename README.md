@@ -205,7 +205,7 @@ All endpoints are prefixed with `/api/v1/`.
 
 ## ML Model Weights
 
-Model weights are **not** checked into the repository. They are stored in `backend/ml_models/` and downloaded automatically from HuggingFace on first use. You can override download URLs with environment variables:
+Model weights are stored in `backend/ml_models/`. CI-critical weights are tracked with Git LFS so regression tests can run on every commit; runtime fallback downloads are used when a configured weight is missing and a download URL is available. You can override download URLs with environment variables:
 
 - `HELMET_MODEL_URL`
 - `PPE_MULTI_MODEL_URL`
