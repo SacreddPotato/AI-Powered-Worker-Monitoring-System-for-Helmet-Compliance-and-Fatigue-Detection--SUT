@@ -28,21 +28,21 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 ```
 ┌────────────────────────────────────────────────────────┐
 │  React SPA (Vite + Tailwind CSS v4)                    │
-│  ┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐            │
-│  │Feeds │ │ Alerts │ │ Models │ │ Dev Lab │            │
-│  └──┬───┘ └───┬────┘ └───┬────┘ └────┬────┘            │
-│     │    REST │  WebSocket│      REST │                │
+│  ┌──────┐ ┌────────┐ ┌────────┐ ┌─────────┐           │
+│  │Feeds │ │ Alerts │ │ Models │ │ Dev Lab │           │
+│  └──┬───┘ └───┬────┘ └───┬────┘ └────┬────┘           │
+│     │    REST  │  WebSocket│     REST  │               │
 └─────┼──────────┼──────────┼───────────┼────────────────┘
       │          │          │           │
 ┌─────┼──────────┼──────────┼───────────┼────────────────┐
 │  Django (DRF + Channels via Daphne ASGI)               │
-│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────┐          │
-│  │ cameras │ │ alerts │ │detection │ │devlab│          │
-│  └────┬────┘ └───┬────┘ └─────┬────┘ └──┬───┘          │
+│  ┌─────────┐ ┌────────┐ ┌──────────┐ ┌──────┐         │
+│  │ cameras │ │ alerts │ │detection │ │devlab│         │
+│  └────┬────┘ └───┬────┘ └─────┬────┘ └──┬───┘         │
 │       │          │            │          │             │
 │  ┌────┴──────────┴────────────┴──────────┴───────────┐ │
 │  │  ML Services (camera, inference, fatigue engine)  │ │
-│  │  YOLOv8 · Swin Transformer · mediapipe landmarks  │ │
+│  │  YOLOv8 · Swin Transformer · MediaPipe landmarks  │ │
 │  └───────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────┘
 ```
@@ -51,7 +51,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 **Frontend:** React 18 + Vite + Tailwind CSS v4 — "Tactical HUD" dark theme with DM Sans / JetBrains Mono typography
 
-**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), mediapioe facial mesh landmarks (EAR/MAR)
+**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), MediaPipe FaceMesh landmarks (EAR/MAR), with auto-download from HuggingFace
 
 **Server:** Daphne (ASGI) serving both HTTP and WebSocket on a single port
 
@@ -69,7 +69,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 - Python 3.10+
 - Node.js 18+ (for frontend build)
-- Conda (recommended for version control)
+- Conda environment `fatigue_env` (recommended for consistent ML dependencies)
 
 ### Python Dependencies
 
@@ -84,7 +84,7 @@ ultralytics
 torch
 torchvision
 numpy
-mediapipe==0.10.14
+mediapipe==0.10.30
 scipy
 imutils
 werkzeug
@@ -106,7 +106,7 @@ Managed via `frontend/package.json` — React 18, Vite, Tailwind CSS v4, React R
 git clone <repo-url>
 cd AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT
 
-# Create conda environment
+# Create conda environment (recommended for ML dependencies)
 conda create -n fatigue_env python=3.10 -y
 conda activate fatigue_env
 
@@ -175,7 +175,7 @@ docker build -t worker-monitor .
 docker run -p 7860:7860 worker-monitor
 ```
 
-The Dockerfile uses Miniconda, builds the frontend, and runs Daphne on port 7860.
+The Dockerfile uses Miniconda, installs Python and Node dependencies, builds the frontend, and runs Daphne on port 7860.
 
 ## API Reference
 
@@ -205,12 +205,45 @@ All endpoints are prefixed with `/api/v1/`.
 
 ## ML Model Weights
 
-Model weights are **not** checked into the repository. They are stored in `backend/ml_models/` and downloaded automatically from HuggingFace on first use. You can override download URLs with environment variables:
+Model weights are stored in `backend/ml_models/`. CI-critical weights are tracked with Git LFS so regression tests can run on every commit; runtime fallback downloads are used when a configured weight is missing and a download URL is available. You can override download URLs with environment variables:
 
 - `HELMET_MODEL_URL`
 - `PPE_MULTI_MODEL_URL`
+- `FATIGUE_MODEL_URL`
 - `PERSON_MODEL_URL`
-- `SHAPE_PREDICTOR_URL`
+- `BOOTS_MODEL_URL`
+- `FACESHIELD_MODEL_URL`
+- `SAFETY_SUIT_MODEL_URL`
+
+`backend/ml_models/model_snapshot.json` pins the exact model artifact snapshot used by regression tests. Regenerate it after intentional model changes:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py write
+```
+
+Verify the committed snapshot without starting the app:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py verify
+```
+
+## Regression and Automation
+
+Backend tests include fast API/service tests, real ML inference tests, model snapshot verification, and baseline contract tests for runtime versions, dependency manifests, CI workflow shape, and deployment automation:
+
+```bash
+conda run -n fatigue_env python -m pytest
+```
+
+Frontend tests cover routes, API client behavior, and tooling contracts:
+
+```bash
+cd frontend
+npm test -- --run
+npm run build
+```
+
+GitHub Actions runs split backend API, model snapshot/ML, frontend, and report-only dependency audit jobs on pushes and pull requests. Dependabot opens weekly update PRs for GitHub Actions, Python requirements, and frontend npm dependencies.
 
 ## Project Structure
 
@@ -223,7 +256,7 @@ backend/
 ├── devlab/             # Video upload, analysis, threshold tuning
 ├── camera_service.py   # OpenCV camera capture service
 ├── inference_service.py# ML inference orchestrator
-├── fatigue_engine.py   # Swin + mediapipe fatigue scoring
+├── fatigue_engine.py   # Swin + MediaPipe fatigue scoring
 ├── model_service.py    # Model loading + HuggingFace download
 ├── alerts_service.py   # Alert creation logic
 ├── config.py           # Runtime configuration

@@ -6,7 +6,7 @@
 2. [Machine Learning Pipeline](#2-machine-learning-pipeline)
    - 2.1 [Helmet Detection (YOLOv8)](#21-helmet-detection-yolov8)
    - 2.2 [PPE Detection (YOLOv8)](#22-ppe-detection-yolov8)
-   - 2.3 [Fatigue Detection (SwinV2-S + dlib)](#23-fatigue-detection-swinv2-s--dlib)
+   - 2.3 [Fatigue Detection (SwinV2-S + MediaPipe)](#23-fatigue-detection-swinv2-s--mediapipe)
    - 2.4 [Annotation Rendering](#24-annotation-rendering)
     - 2.5 [Model Selection Rationale](#25-model-selection-rationale)
 3. [Backend Architecture](#3-backend-architecture)
@@ -43,7 +43,7 @@ The dashboard includes live monitoring, alert center analytics, model/severity m
 | **WebSocket** | Django Channels (InMemoryChannelLayer) | Real-time alert push, camera binary frame streaming, live video analysis streaming |
 | **Object Detection** | YOLOv8n (Ultralytics) | Helmet and PPE detection (vest, gloves, goggles, boots, faceshield, safetysuit) |
 | **Fatigue Model** | Swin Vision Transformer v2-Small | Drowsiness classification from face patches |
-| **Facial Landmarks** | dlib 68-point shape predictor | EAR/MAR computation, head pose estimation |
+| **Facial Landmarks** | MediaPipe FaceMesh | EAR/MAR computation, head pose estimation |
 | **Feature Assist** | MediaPipe Hands / Face Mesh | Robust glove/goggle absence estimation when explicit `no_*` classes are weak |
 | **Computer Vision** | OpenCV | Frame capture, image processing, head pose via PnP |
 | **Frontend Framework** | React 18 | Single-page application |
@@ -75,7 +75,7 @@ The dashboard includes live monitoring, alert center analytics, model/severity m
 │  ┌─────────────────────────┴────────────────────────────────┐│
 │  │  ML Inference Service                                     ││
 │  │  ┌─────────────┐ ┌──────────────┐ ┌────────────────────┐ ││
-│  │  │ YOLOv8n     │ │ SwinV2-Small │ │ dlib 68-landmarks  │ ││
+│  │  │ YOLOv8n     │ │ SwinV2-Small │ │ MediaPipe landmarks│ ││
 │  │  │ (Helmet/PPE)│ │ (Fatigue)    │ │ (EAR/MAR/Pose)     │ ││
 │  │  └─────────────┘ └──────────────┘ └────────────────────┘ ││
 │  └──────────────────────────────────────────────────────────┘│
@@ -91,7 +91,7 @@ The system runs **eight detection model keys** — helmet, fatigue, vest, gloves
 ### Why this model stack?
 
 - **YOLOv8n for PPE:** chosen for strong real-time throughput on CPU/GPU with simple deployment; compared to heavier detectors, it gives lower latency and easier operational tuning.
-- **SwinV2-S + dlib for fatigue:** chosen over a pure detector because fatigue is temporal/physiological; combining deep features with EAR/MAR and head pose improves robustness and interpretability.
+- **SwinV2-S + MediaPipe for fatigue:** chosen over a pure detector because fatigue is temporal/physiological; combining deep features with EAR/MAR and head pose improves robustness and interpretability.
 - **Hybrid architecture:** keeps mission-critical alerts explainable (landmark metrics + trigger reasons) while retaining modern model accuracy.
 
 ### 2.1 Helmet Detection (YOLOv8)
@@ -224,7 +224,7 @@ The vest adapter has an additional QR code detection step:
 }
 ```
 
-### 2.3 Fatigue Detection (SwinV2-S + dlib)
+### 2.3 Fatigue Detection (SwinV2-S + MediaPipe)
 
 Fatigue detection is the most complex model in the system, combining a deep learning vision transformer with classical computer vision techniques in a **hybrid scoring pipeline**.
 
@@ -246,13 +246,13 @@ Fatigue detection is the most complex model in the system, combining a deep lear
 
 #### Face Detection & Landmark Extraction
 
-**dlib Face Detector:**
-- `dlib.get_frontal_face_detector()` — HOG-based frontal face detector
+**MediaPipe FaceMesh:**
+- `mediapipe.solutions.face_mesh.FaceMesh` — face landmark extraction for EAR/MAR and pose features
 - Detects the largest face in the frame
 - Pads the face region by ±12 pixels for context
 
-**68-Point Shape Predictor:**
-- `shape_predictor_68_face_landmarks.dat` (downloaded from dlib-models)
+**FaceMesh Landmarks:**
+- MediaPipe FaceMesh landmarks are produced at runtime; no external shape predictor file is required
 - Extracts 68 facial landmarks organized into regions:
   - Points 0–16: Jawline
   - Points 17–26: Eyebrows
@@ -347,8 +347,8 @@ hybrid_score = 0.6 × ml_probability + 0.3 × ear_score + 0.1 × mar_score
 | Component | Weight | Source | Measures |
 |-----------|--------|--------|----------|
 | ML Probability | 60% | SwinV2-S sigmoid output | Visual drowsiness patterns |
-| EAR Score | 30% | dlib landmarks | Eye closure |
-| MAR Score | 10% | dlib landmarks | Yawning |
+| EAR Score | 30% | MediaPipe landmarks | Eye closure |
+| MAR Score | 10% | MediaPipe landmarks | Yawning |
 
 **Decision Logic:**
 ```
@@ -438,7 +438,7 @@ The annotation module (`annotation.py`) draws detection results onto video frame
 | `boots` | YOLOv8n | Same runtime stack as existing PPE models | Fast integration with existing overlays/alerts |
 | `faceshield` | YOLOv8n | Works with existing class-filter inference path | Consistent deployment and maintenance path |
 | `safetysuit` | YOLOv8n | Keeps PPE logic unified across garment classes | Low-friction extension to per-camera policy controls |
-| `fatigue` | SwinV2-S + dlib landmarks + OpenCV PnP | Fatigue is behavior/state, not only object presence | Hybrid explainable scoring with tunable safety thresholds |
+| `fatigue` | SwinV2-S + MediaPipe landmarks + OpenCV PnP | Fatigue is behavior/state, not only object presence | Hybrid explainable scoring with tunable safety thresholds |
 
 ---
 
@@ -667,7 +667,7 @@ This project uses both **internal application APIs** and **external service inte
 | Channels WebSocket (`/ws/*`) | Internal realtime API | Push alerts, low-latency streams, video-analysis frames | Lower polling overhead and better UX for live operations |
 | Ultralytics Python API (`YOLO(...)`) | External library API | Load/infer YOLO checkpoints; expose class metadata | Fast integration and consistent inference code path |
 | PyTorch API | External library API | Load/run Swin checkpoint and tensor transforms | Required runtime for transformer fatigue model |
-| dlib API | External library API | 68-point landmarks for EAR/MAR/pose inputs | Stable classical face landmarks; interpretable signals |
+| MediaPipe API | External library API | FaceMesh landmarks for EAR/MAR/pose inputs | Stable real-time face landmarks; interpretable signals |
 | OpenCV API | External library API | Capture, encode, draw overlays, PnP head pose, QR detection | Production-ready CV primitives with strong ecosystem support |
 | MediaPipe API | External library API | Hand/face feature regions to assist glove/goggle absence logic | Improves robustness where object classes are small/ambiguous |
 | HuggingFace model URLs (HTTP) | External model source | Optional automatic model downloads on missing files | Simplifies first-run setup and model distribution |
@@ -921,7 +921,7 @@ All thresholds are defined in `backend/config.py` and tunable via the Dev Lab:
 | Safety Suit | `ml_models/safety_suit_detection.pt` | Project-local |
 | Person | `ml_models/yolov8n.pt` | ultralytics/assets |
 | Swin Fatigue | `ml_models/swin_best.pth` | Custom trained |
-| Shape Predictor | `ml_models/shape_predictor_68_face_landmarks.dat` | dlib-models |
+| Face Landmarks | MediaPipe FaceMesh runtime | MediaPipe |
 
 ---
 
@@ -951,7 +951,7 @@ docker build -t sentinel .
 docker run -p 7860:7860 sentinel
 ```
 
-The Dockerfile uses Miniconda for dlib compatibility, installs all Python and Node dependencies, builds the frontend, and runs Daphne.
+The Dockerfile uses Miniconda for consistent ML dependencies, installs all Python and Node dependencies, builds the frontend, and runs Daphne.
 
 ### System Requirements
 

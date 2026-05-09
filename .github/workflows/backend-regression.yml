@@ -1,0 +1,184 @@
+name: Regression Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-api:
+    name: backend-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libegl1
+
+      - name: Set up Conda fatigue_env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: fatigue_env
+          python-version: "3.10"
+          auto-activate-base: false
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Install Python dependencies
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run backend API regression suite
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pytest -m "not ml" -q
+
+  model-snapshot:
+    name: model-snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libegl1
+
+      - name: Set up Conda fatigue_env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: fatigue_env
+          python-version: "3.10"
+          auto-activate-base: false
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Cache model downloads
+        uses: actions/cache@v4
+        with:
+          path: backend/ml_models
+          key: ml-models-${{ runner.os }}-${{ hashFiles('backend/ml_models/model_snapshot.json') }}
+
+      - name: Install Python dependencies
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Verify model snapshot
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python scripts/snapshot_models.py verify
+
+      - name: Run real ML regression suite
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pytest -m ml -q
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend route and API tests
+        working-directory: frontend
+        run: npm test -- --run
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Conda fatigue_env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: fatigue_env
+          python-version: "3.10"
+          auto-activate-base: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Run Python dependency audit
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+          python -m pip_audit -r requirements-dev.txt --format json --output pip-audit.json || echo "{}" > pip-audit.json
+
+      - name: Run frontend dependency audit
+        working-directory: frontend
+        run: npm audit --json > ../npm-audit.json || true
+
+      - name: Upload dependency audit reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-audit-reports
+          path: |
+            pip-audit.json
+            npm-audit.json
