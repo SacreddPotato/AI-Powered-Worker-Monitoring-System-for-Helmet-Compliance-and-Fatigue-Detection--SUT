@@ -9,7 +9,13 @@ const expectedDependencyMajors = {
     "react-router-dom": 7,
   },
   devDependencies: {
+    "@eslint/js": 9,
     "@tailwindcss/vite": 4,
+    eslint: 9,
+    "eslint-plugin-react": 7,
+    "eslint-plugin-react-hooks": 5,
+    "eslint-plugin-react-refresh": 0,
+    globals: 15,
     vite: 5,
     vitest: 3,
     jsdom: 27,
@@ -31,6 +37,7 @@ describe("frontend tooling contract", () => {
       build: "vite build",
       preview: "vite preview",
       test: "vitest",
+      lint: "eslint \"src/**/*.{js,jsx}\"",
     });
   });
 

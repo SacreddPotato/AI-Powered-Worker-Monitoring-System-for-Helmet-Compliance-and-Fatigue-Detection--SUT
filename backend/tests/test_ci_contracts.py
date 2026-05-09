@@ -25,8 +25,11 @@ def test_regression_workflow_prod_ready_contract(root_dir):
     assert "snapshot_models.py verify" in workflow
     assert 'python -m pytest -m "not ml" -q' in workflow
     assert "python -m pytest -m ml -q" in workflow
+    assert "npm run lint" in workflow
     assert "npm test -- --run" in workflow
     assert "npm run build" in workflow
+    assert "ruff" not in workflow
+    assert "bandit" not in workflow
 
 
 def test_model_cache_does_not_restore_stale_snapshots(root_dir):
