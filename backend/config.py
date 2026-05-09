@@ -78,7 +78,7 @@ MODEL_DEFINITIONS = {
     },
     "boots": {
         "display_name": "Boot Detection",
-        "description": "Detects worker safety boots.",
+        "description": "Detects worker safety boots from MediaPipe foot regions using Ultralytics pretrained weights.",
         "weights_path": str(ML_MODELS_DIR / "boots_detection.pt"),
         "download_urls": [BOOTS_MODEL_URL],
         "target_labels": ["boot", "boots", "safety boot", "safety boots", "no_boot", "no-boots", "no boots"],

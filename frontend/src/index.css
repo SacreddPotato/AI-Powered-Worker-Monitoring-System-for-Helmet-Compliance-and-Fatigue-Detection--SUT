@@ -7,8 +7,8 @@ html {
 @theme {
   --font-sans: "DM Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  --color-surface: #18181b;
-  --color-surface-alt: #111113;
+  --color-surface: #1c1c21;
+  --color-surface-alt: #15151a;
 }
 
 /* Scrollbar styling */
@@ -17,11 +17,129 @@ html {
 ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
 
+/* Reveal Animations */
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal-active {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+/* Glassmorphism Utilities */
+.glass-card {
+  background: rgba(18, 12, 26, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 32px 0 rgba(99, 102, 241, 0.1);
+}
+
+/* Section Scan Effect */
+.section-scan-line {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.5), transparent);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.reveal-active .section-scan-line {
+  animation: scanReveal 1.5s ease-in-out forwards;
+}
+
+@keyframes scanReveal {
+  0% { left: -100%; opacity: 0; }
+  50% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes scanline {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+
+/* Dynamic Interactive Cards */
+.dynamic-card {
+  position: relative;
+  transition: transform 0.1s ease-out;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.spotlight-wrapper {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.spotlight {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    400px circle at var(--mouse-x) var(--mouse-y),
+    rgba(99, 102, 241, 0.15),
+    transparent 80%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.dynamic-card:hover .spotlight {
+  opacity: 1;
+}
+
+/* HUD Tech Accents */
+.tech-bracket {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: rgba(99, 102, 241, 0.4);
+  pointer-events: none;
+}
+
+.tech-bracket-tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
+.tech-bracket-br { bottom: 12px; right: 12px; border-bottom: 1px solid; border-right: 1px solid; }
+
+.hud-coordinates {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: rgba(99, 102, 241, 0.3);
+  letter-spacing: 1px;
+  pointer-events: none;
+}
+
 /* Grid background for body */
 body {
-  background-color: #09090b;
+  background-color: #0e0e11;
   background-image:
     linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
   background-size: 28px 28px;
+  color: #f4f4f5;
+  overflow-x: hidden;
 }

@@ -84,6 +84,7 @@ ultralytics
 torch
 torchvision
 numpy
+mediapipe==0.10.30
 scipy
 imutils
 werkzeug
