@@ -83,8 +83,6 @@ jobs:
         with:
           path: backend/ml_models
           key: ml-models-${{ runner.os }}-${{ hashFiles('backend/ml_models/model_snapshot.json') }}
-          restore-keys: |
-            ml-models-${{ runner.os }}-
 
       - name: Install Python dependencies
         shell: bash -l {0}
