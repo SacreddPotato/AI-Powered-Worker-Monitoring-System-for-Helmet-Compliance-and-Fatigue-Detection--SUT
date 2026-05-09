@@ -227,6 +227,24 @@ Verify the committed snapshot without starting the app:
 conda run -n fatigue_env python scripts/snapshot_models.py verify
 ```
 
+## Regression and Automation
+
+Backend tests include fast API/service tests, real ML inference tests, model snapshot verification, and baseline contract tests for runtime versions, dependency manifests, CI workflow shape, and deployment automation:
+
+```bash
+conda run -n fatigue_env python -m pytest
+```
+
+Frontend tests cover routes, API client behavior, and tooling contracts:
+
+```bash
+cd frontend
+npm test -- --run
+npm run build
+```
+
+GitHub Actions runs split backend API, model snapshot/ML, frontend, and report-only dependency audit jobs on pushes and pull requests. Dependabot opens weekly update PRs for GitHub Actions, Python requirements, and frontend npm dependencies.
+
 ## Project Structure
 
 ```

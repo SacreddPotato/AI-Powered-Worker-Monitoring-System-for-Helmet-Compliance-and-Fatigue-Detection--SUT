@@ -16,4 +16,6 @@
 ## Verification
 - Run backend tests with `conda run -n fatigue_env python -m pytest`.
 - Run targeted ML tests with `conda run -n fatigue_env python -m pytest -m ml`.
-- GitHub Actions runs backend API tests, model snapshot/ML tests, frontend route/API tests, and the frontend build on pushes and pull requests.
+- Baseline contract tests guard Python/package major-minor versions, dependency manifests, frontend tooling, CI workflow shape, and deployment automation.
+- GitHub Actions runs backend API tests, model snapshot/ML tests, frontend route/API tests, dependency audit reports, and the frontend build on pushes and pull requests.
+- Dependency audits are report-only in CI; Dependabot opens weekly update PRs for GitHub Actions, Python requirements, and frontend npm dependencies.

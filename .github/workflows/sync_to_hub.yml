@@ -7,12 +7,19 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-to-hub-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync-to-hub:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true  # CRITICAL: Downloads your large fatigue detection model files
