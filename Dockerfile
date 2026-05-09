@@ -5,9 +5,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Install dlib via conda
-RUN conda install -y -c conda-forge dlib
-
 # Copy project
 COPY . /app
 WORKDIR /app

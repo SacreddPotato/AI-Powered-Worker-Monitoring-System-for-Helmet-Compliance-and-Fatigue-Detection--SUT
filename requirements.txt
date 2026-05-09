@@ -8,7 +8,6 @@ ultralytics
 torch
 torchvision
 numpy
-dlib
 scipy
 imutils
 werkzeug

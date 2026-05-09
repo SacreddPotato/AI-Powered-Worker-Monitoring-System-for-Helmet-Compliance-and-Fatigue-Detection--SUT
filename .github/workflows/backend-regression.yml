@@ -1,0 +1,60 @@
+name: Backend Regression Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libegl1
+
+      - name: Set up Conda fatigue_env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: fatigue_env
+          python-version: "3.10"
+          auto-activate-base: false
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Cache model downloads
+        uses: actions/cache@v4
+        with:
+          path: backend/ml_models
+          key: ml-models-${{ runner.os }}-${{ hashFiles('backend/config.py') }}
+          restore-keys: |
+            ml-models-${{ runner.os }}-
+
+      - name: Install Python dependencies
+        shell: bash -l {0}
+        run: |
+          conda activate fatigue_env
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run backend regression suite
+        shell: bash -l {0}
+        env:
+          FATIGUE_MODEL_URL: ${{ secrets.FATIGUE_MODEL_URL }}
+        run: |
+          conda activate fatigue_env
+          python -m pytest -q

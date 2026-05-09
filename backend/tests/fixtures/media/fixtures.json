@@ -1,0 +1,6 @@
+{
+  "negative": {
+    "path": "tests/fixtures/media/blank_320x240.png",
+    "description": "Low-texture negative fixture used to verify every model returns a controlled result without crashing."
+  }
+}

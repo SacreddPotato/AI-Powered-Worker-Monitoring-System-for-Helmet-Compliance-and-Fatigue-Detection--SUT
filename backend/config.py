@@ -18,13 +18,10 @@ PPE_MULTI_MODEL_URL = os.environ.get(
     "PPE_MULTI_MODEL_URL",
     "https://huggingface.co/Tanishjain9/yolov8n-ppe-detection-6classes/resolve/main/best.pt",
 )
+FATIGUE_MODEL_URL = os.environ.get("FATIGUE_MODEL_URL", "")
 PERSON_MODEL_URL = os.environ.get(
     "PERSON_MODEL_URL",
     "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt",
-)
-SHAPE_PREDICTOR_URL = os.environ.get(
-    "SHAPE_PREDICTOR_URL",
-    "https://github.com/davisking/dlib-models/raw/master/shape_predictor_68_face_landmarks.dat.bz2",
 )
 BOOTS_MODEL_URL = os.environ.get(
     "BOOTS_MODEL_URL",
@@ -32,6 +29,10 @@ BOOTS_MODEL_URL = os.environ.get(
 )
 FACESHIELD_MODEL_URL = os.environ.get("FACESHIELD_MODEL_URL", "")
 SAFETY_SUIT_MODEL_URL = os.environ.get("SAFETY_SUIT_MODEL_URL", "")
+FACE_LANDMARKER_URL = os.environ.get(
+    "FACE_LANDMARKER_URL",
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+)
 
 MODEL_DEFINITIONS = {
     "helmet": {
@@ -48,9 +49,9 @@ MODEL_DEFINITIONS = {
         "display_name": "Fatigue Detection",
         "description": "Hybrid fatigue scoring with Swin model + EAR/MAR + head tilt alerts.",
         "weights_path": str(ML_MODELS_DIR / "swin_best.pth"),
-        "shape_predictor_path": str(ML_MODELS_DIR / "shape_predictor_68_face_landmarks.dat"),
-        "download_urls": [],
-        "shape_download_urls": [SHAPE_PREDICTOR_URL],
+        "face_landmarker_path": str(ML_MODELS_DIR / "face_landmarker.task"),
+        "download_urls": [FATIGUE_MODEL_URL],
+        "face_landmarker_download_urls": [FACE_LANDMARKER_URL],
     },
     "vest": {
         "display_name": "Vest Detection",
@@ -117,7 +118,7 @@ def ensure_ml_models_layout() -> None:
         "best.pt",
         "yolov8n.pt",
         "swin_best.pth",
-        "shape_predictor_68_face_landmarks.dat",
+        "face_landmarker.task",
         "vest_detection.pt",
         "gloves_detection.pt",
         "goggles_detection.pt",

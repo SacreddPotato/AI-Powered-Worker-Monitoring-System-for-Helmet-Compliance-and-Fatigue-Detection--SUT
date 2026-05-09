@@ -42,7 +42,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 │       │          │            │          │             │
 │  ┌────┴──────────┴────────────┴──────────┴───────────┐ │
 │  │  ML Services (camera, inference, fatigue engine)  │ │
-│  │  YOLOv8 · Swin Transformer · dlib landmarks       │ │
+│  │  YOLOv8 · Swin Transformer · MediaPipe landmarks  │ │
 │  └───────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────┘
 ```
@@ -51,7 +51,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 **Frontend:** React 18 + Vite + Tailwind CSS v4 — "Tactical HUD" dark theme with DM Sans / JetBrains Mono typography
 
-**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), dlib 68-point landmarks (EAR/MAR), with auto-download from HuggingFace
+**ML Models:** YOLOv8 (helmet/PPE), Swin Transformer (fatigue), MediaPipe FaceMesh landmarks (EAR/MAR), with auto-download from HuggingFace
 
 **Server:** Daphne (ASGI) serving both HTTP and WebSocket on a single port
 
@@ -69,7 +69,7 @@ Real-time worker safety monitoring dashboard with helmet compliance detection, f
 
 - Python 3.10+
 - Node.js 18+ (for frontend build)
-- Conda (recommended, required for dlib)
+- Conda environment `fatigue_env` (recommended for consistent ML dependencies)
 
 ### Python Dependencies
 
@@ -84,7 +84,6 @@ ultralytics
 torch
 torchvision
 numpy
-dlib
 scipy
 imutils
 werkzeug
@@ -106,10 +105,9 @@ Managed via `frontend/package.json` — React 18, Vite, Tailwind CSS v4, React R
 git clone <repo-url>
 cd AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT
 
-# Create conda environment (recommended for dlib)
+# Create conda environment (recommended for ML dependencies)
 conda create -n fatigue_env python=3.10 -y
 conda activate fatigue_env
-conda install -c conda-forge dlib -y
 
 pip install -r requirements.txt
 ```
@@ -176,7 +174,7 @@ docker build -t worker-monitor .
 docker run -p 7860:7860 worker-monitor
 ```
 
-The Dockerfile uses Miniconda, installs dlib via conda, builds the frontend, and runs Daphne on port 7860.
+The Dockerfile uses Miniconda, installs Python and Node dependencies, builds the frontend, and runs Daphne on port 7860.
 
 ## API Reference
 
@@ -210,8 +208,11 @@ Model weights are **not** checked into the repository. They are stored in `backe
 
 - `HELMET_MODEL_URL`
 - `PPE_MULTI_MODEL_URL`
+- `FATIGUE_MODEL_URL`
 - `PERSON_MODEL_URL`
-- `SHAPE_PREDICTOR_URL`
+- `BOOTS_MODEL_URL`
+- `FACESHIELD_MODEL_URL`
+- `SAFETY_SUIT_MODEL_URL`
 
 ## Project Structure
 
@@ -224,7 +225,7 @@ backend/
 ├── devlab/             # Video upload, analysis, threshold tuning
 ├── camera_service.py   # OpenCV camera capture service
 ├── inference_service.py# ML inference orchestrator
-├── fatigue_engine.py   # Swin + dlib fatigue scoring
+├── fatigue_engine.py   # Swin + MediaPipe fatigue scoring
 ├── model_service.py    # Model loading + HuggingFace download
 ├── alerts_service.py   # Alert creation logic
 ├── config.py           # Runtime configuration

@@ -57,6 +57,7 @@ frontend/dist/
 backend/ml_models/*.pt
 backend/ml_models/*.pth
 backend/ml_models/*.dat
+backend/ml_models/*.task
 
 # Brainstorming artifacts
 .superpowers/

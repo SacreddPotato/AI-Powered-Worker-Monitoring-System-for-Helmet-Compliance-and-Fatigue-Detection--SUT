@@ -359,7 +359,7 @@ class PPEModelAdapter:
 
         try:
             results = self._model(frame, conf=0.35, verbose=False)
-            boxes = results[0].boxes
+            boxes = results[0].boxes or []
             names = results[0].names or {}
             selected_confidences = []
             selected_boxes = []
@@ -517,8 +517,8 @@ class PPEModelAdapter:
                 "model_classes": self.model_classes,
                 "matched_target_labels": self.matched_labels,
             }
-            if self.supports_qr and count > 0:
-                vest_qr = self._extract_qr(frame, selected_boxes)
+            if self.supports_qr:
+                vest_qr = self._extract_qr(frame, selected_boxes) if count > 0 else ""
                 payload["vest_id"] = vest_qr or None
             payload["camera_id"] = camera_id
 
@@ -671,8 +671,8 @@ class FatigueModelAdapter:
         self.description = model_info["description"]
         self.weights_path = model_info["weights_path"]
         self.download_urls = model_info.get("download_urls", [])
-        self.shape_predictor_path = model_info.get("shape_predictor_path")
-        self.shape_download_urls = model_info.get("shape_download_urls", [])
+        self.face_landmarker_path = model_info.get("face_landmarker_path")
+        self.face_landmarker_download_urls = model_info.get("face_landmarker_download_urls", [])
         self.available = False
         self.load_error = None
         self.download_error = None
@@ -688,9 +688,8 @@ class FatigueModelAdapter:
                 self.download_error = error
             else:
                 self.downloaded = True
-
-        if self.shape_predictor_path and not os.path.exists(self.shape_predictor_path):
-            error = _download_any(self.shape_download_urls, self.shape_predictor_path)
+        if self.face_landmarker_path and not os.path.exists(self.face_landmarker_path):
+            error = _download_any(self.face_landmarker_download_urls, self.face_landmarker_path)
             if error and not self.download_error:
                 self.download_error = error
             elif not error:
@@ -707,10 +706,10 @@ class FatigueModelAdapter:
             if self.download_error:
                 self.load_error += f". Download failed: {self.download_error}"
             return
-        if not self.shape_predictor_path or not os.path.exists(self.shape_predictor_path):
+        if not self.face_landmarker_path or not os.path.exists(self.face_landmarker_path):
             self.load_error = (
-                f"Shape predictor missing at {self.shape_predictor_path}. "
-                "Facial plotting is required for fatigue scoring."
+                f"MediaPipe face landmarker missing at {self.face_landmarker_path}. "
+                "Face landmarks are required for fatigue scoring."
             )
             if self.download_error:
                 self.load_error += f" Download failed: {self.download_error}"
@@ -719,7 +718,7 @@ class FatigueModelAdapter:
         try:
             self._engine = FatigueHybridEngine(
                 model_path=self.weights_path,
-                shape_predictor_path=self.shape_predictor_path,
+                face_landmarker_path=self.face_landmarker_path,
                 head_tilt_alert_degrees=HEAD_TILT_ALERT_DEGREES,
             )
             self.available = True

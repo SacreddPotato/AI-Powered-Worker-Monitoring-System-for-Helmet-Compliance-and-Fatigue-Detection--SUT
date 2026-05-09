@@ -1,12 +1,14 @@
 from typing import Dict
 
 import cv2
-import dlib
+from mediapipe import Image as MpImage
+from mediapipe import ImageFormat
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision as mp_vision
 import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.models as models
-from imutils import face_utils
 from PIL import Image
 from scipy.spatial import distance as dist
 from torchvision import transforms
@@ -20,7 +22,7 @@ class FatigueHybridEngine:
     def __init__(
         self,
         model_path: str,
-        shape_predictor_path: str,
+        face_landmarker_path: str,
         head_tilt_alert_degrees: float = 15.0,
         fatigue_threshold: float = 0.55,
     ):
@@ -29,7 +31,6 @@ class FatigueHybridEngine:
         self.fatigue_threshold = float(fatigue_threshold)
         self.ear_threshold = 0.28
         self.mar_scale_max = 1.0
-        # Tuned for observed closed-eye EAR band (~0.18-0.22).
         self.ear_force_fatigue_threshold = 0.22
         self.mar_narrow_threshold = 0.28
 
@@ -46,23 +47,25 @@ class FatigueHybridEngine:
         self.model.to(self.device)
         self.model.eval()
 
-        self.detector = dlib.get_frontal_face_detector()
-        self.predictor = dlib.shape_predictor(shape_predictor_path)
-        (self.left_start, self.left_end) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
-        (self.right_start, self.right_end) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
-        self.mouth_start, self.mouth_end = (60, 68)
-
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225],
-                ),
-            ]
+        base_options = mp_python.BaseOptions(model_asset_path=face_landmarker_path)
+        options = mp_vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=mp_vision.RunningMode.IMAGE,
+            num_faces=1,
+            min_face_detection_confidence=0.35,
+            min_face_presence_confidence=0.35,
+            min_tracking_confidence=0.35,
         )
+        self.face_landmarker_error = None
+        try:
+            self.face_landmarker = mp_vision.FaceLandmarker.create_from_options(options)
+        except Exception as exc:
+            self.face_landmarker = None
+            self.face_landmarker_error = str(exc)
 
+        self.left_eye_indices = [33, 160, 158, 133, 153, 144]
+        self.right_eye_indices = [362, 385, 387, 263, 373, 380]
+        self.mouth_indices = [61, 81, 13, 311, 291, 402, 14, 178]
         self.model_points_3d = np.array(
             [
                 (0.0, 0.0, 0.0),
@@ -73,6 +76,17 @@ class FatigueHybridEngine:
                 (28.9, -28.9, -24.1),
             ],
             dtype=np.float64,
+        )
+
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225],
+                ),
+            ]
         )
 
     def _eye_aspect_ratio(self, eye) -> float:
@@ -92,15 +106,30 @@ class FatigueHybridEngine:
             return 0.0
         return float((a + b + c) / (3.0 * d))
 
+    def _landmarks_to_pixels(self, face_landmarks, frame_h: int, frame_w: int):
+        points = []
+        for landmark in face_landmarks:
+            x = min(frame_w - 1, max(0, int(landmark.x * frame_w)))
+            y = min(frame_h - 1, max(0, int(landmark.y * frame_h)))
+            points.append((x, y))
+        return np.array(points, dtype=np.float64)
+
+    def _face_box(self, landmarks):
+        x1 = int(np.min(landmarks[:, 0]))
+        y1 = int(np.min(landmarks[:, 1]))
+        x2 = int(np.max(landmarks[:, 0]))
+        y2 = int(np.max(landmarks[:, 1]))
+        return {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+
     def _head_pose(self, landmarks, frame_h, frame_w):
         image_points = np.array(
             [
-                landmarks[30],
-                landmarks[8],
-                landmarks[36],
-                landmarks[45],
-                landmarks[48],
-                landmarks[54],
+                landmarks[1],
+                landmarks[152],
+                landmarks[33],
+                landmarks[263],
+                landmarks[61],
+                landmarks[291],
             ],
             dtype="double",
         )
@@ -122,8 +151,8 @@ class FatigueHybridEngine:
             dist_coeffs,
             flags=cv2.SOLVEPNP_ITERATIVE,
         )
+        nose = (int(image_points[0][0]), int(image_points[0][1]))
         if not success:
-            nose = (int(image_points[0][0]), int(image_points[0][1]))
             return 0.0, 0.0, 0.0, nose, nose
 
         rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
@@ -131,23 +160,20 @@ class FatigueHybridEngine:
         pitch = float(angles[0])
         yaw = float(angles[1])
         roll = float(angles[2])
-        nose = (int(image_points[0][0]), int(image_points[0][1]))
         line_dx = float(yaw * 2.0)
         line_dy = float(-pitch * 2.0)
         line_end = (int(nose[0] + line_dx), int(nose[1] + line_dy))
-        # Keep overlay direction stable (nose -> forehead); tilt thresholding uses abs values separately.
         if line_end[1] > nose[1]:
             line_end = (int(nose[0] - line_dx), int(nose[1] - line_dy))
         return pitch, yaw, roll, nose, line_end
 
-    def _fatigue_ml_probability(self, frame, rect) -> float:
-        x, y, w, h = face_utils.rect_to_bb(rect)
+    def _fatigue_ml_probability(self, frame, face_box) -> float:
         frame_h, frame_w = frame.shape[:2]
         pad = 12
-        x1 = max(0, x - pad)
-        y1 = max(0, y - pad)
-        x2 = min(frame_w, x + w + pad)
-        y2 = min(frame_h, y + h + pad)
+        x1 = max(0, int(face_box["x1"]) - pad)
+        y1 = max(0, int(face_box["y1"]) - pad)
+        x2 = min(frame_w, int(face_box["x2"]) + pad)
+        y2 = min(frame_h, int(face_box["y2"]) + pad)
         face = frame[y1:y2, x1:x2]
         if face.size == 0:
             return 0.0
@@ -161,9 +187,30 @@ class FatigueHybridEngine:
         return float(prob)
 
     def analyze(self, frame) -> Dict:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        rects = self.detector(gray, 0)
-        if len(rects) == 0:
+        frame_h, frame_w = frame.shape[:2]
+        if self.face_landmarker is None:
+            return {
+                "status": "no_face",
+                "fatigue_probability": 0.0,
+                "ear": 0.0,
+                "mar": 0.0,
+                "head_tilt_degrees": 0.0,
+                "hybrid_score": 0.0,
+                "is_fatigued": False,
+                "head_tilt_exceeded": False,
+                "facial_plotting_used": False,
+                "landmarks_count": 0,
+                "face_box": None,
+                "landmarks": [],
+                "pose_line": None,
+                "landmark_backend": "mediapipe_unavailable",
+                "landmark_error": self.face_landmarker_error,
+            }
+
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = MpImage(image_format=ImageFormat.SRGB, data=frame_rgb)
+        result = self.face_landmarker.detect(image)
+        if not result.face_landmarks:
             return {
                 "status": "no_face",
                 "fatigue_probability": 0.0,
@@ -180,26 +227,19 @@ class FatigueHybridEngine:
                 "pose_line": None,
             }
 
-        rect = rects[0]
-        x, y, w, h = face_utils.rect_to_bb(rect)
-        shape = self.predictor(gray, rect)
-        landmarks = face_utils.shape_to_np(shape)
-
-        left_ear = self._eye_aspect_ratio(landmarks[self.left_start : self.left_end])
-        right_ear = self._eye_aspect_ratio(landmarks[self.right_start : self.right_end])
+        landmarks = self._landmarks_to_pixels(result.face_landmarks[0], frame_h, frame_w)
+        face_box = self._face_box(landmarks)
+        left_ear = self._eye_aspect_ratio(landmarks[self.left_eye_indices])
+        right_ear = self._eye_aspect_ratio(landmarks[self.right_eye_indices])
         ear = (left_ear + right_ear) / 2.0
+        mar = self._mouth_aspect_ratio(landmarks[self.mouth_indices])
 
-        mouth = landmarks[self.mouth_start : self.mouth_end]
-        mar = self._mouth_aspect_ratio(mouth)
-
-        frame_h, frame_w = frame.shape[:2]
         pitch, yaw, roll, nose, line_end = self._head_pose(landmarks, frame_h, frame_w)
         head_tilt_degrees = max(abs(pitch), abs(roll))
         head_tilt_exceeded = head_tilt_degrees > self.head_tilt_alert_degrees
 
-        ml_prob = self._fatigue_ml_probability(frame, rect)
+        ml_prob = self._fatigue_ml_probability(frame, face_box)
         ear_score = _clamp((self.ear_threshold - ear) / self.ear_threshold, 0.0, 1.0)
-        # Mouth openness is a continuous supporting signal (no hard yawning threshold).
         mar_score = _clamp(mar / self.mar_scale_max, 0.0, 1.0)
         hybrid_score = (0.65 * ml_prob) + (0.3 * ear_score) + (0.05 * mar_score)
         eyes_closed_hard = ear <= self.ear_force_fatigue_threshold
@@ -232,12 +272,7 @@ class FatigueHybridEngine:
             "head_tilt_exceeded": bool(head_tilt_exceeded),
             "facial_plotting_used": True,
             "landmarks_count": int(len(landmarks)),
-            "face_box": {
-                "x1": int(x),
-                "y1": int(y),
-                "x2": int(x + w),
-                "y2": int(y + h),
-            },
+            "face_box": face_box,
             "landmarks": [[int(px), int(py)] for (px, py) in landmarks.tolist()],
             "pose_line": {
                 "start": [int(nose[0]), int(nose[1])],
