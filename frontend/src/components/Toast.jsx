@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 const SEVERITY_STYLES = {
   high: "border-l-red-500",

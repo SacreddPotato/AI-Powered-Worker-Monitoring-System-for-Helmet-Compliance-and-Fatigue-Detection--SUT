@@ -227,6 +227,58 @@ Verify the committed snapshot without starting the app:
 conda run -n fatigue_env python scripts/snapshot_models.py verify
 ```
 
+## Everyday Development Workflow
+
+For ordinary code-only changes, you do not need to regenerate model snapshots or change environment contracts. Edit the code, run the checks for the area you touched, commit, and push. GitHub Actions will run the full regression gate.
+
+### Backend-only changes
+
+Use the Conda environment and run the fast backend suite:
+
+```bash
+conda run -n fatigue_env python -m pytest -m "not ml" -q
+```
+
+Run the full backend suite before larger changes:
+
+```bash
+conda run -n fatigue_env python -m pytest -q
+```
+
+### ML or inference-facing changes
+
+If you change inference code, model definitions, thresholds, annotation contracts, or anything that can affect real model output, verify the snapshot and run the ML suite:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py verify
+conda run -n fatigue_env python -m pytest -m ml -q
+```
+
+### Frontend changes
+
+Run lint first, then tests and the production build:
+
+```bash
+cd frontend
+npm run lint
+npm test -- --run
+npm run build
+```
+
+ESLint is a blocking CI check. Existing React Hook dependency warnings are visible during linting; treat new warnings as things to clean up unless they are intentionally preserving current behavior.
+
+## When to Update Snapshots or Dependencies
+
+Update `backend/ml_models/model_snapshot.json` only when model artifacts or configured model artifact paths intentionally change:
+
+```bash
+conda run -n fatigue_env python scripts/snapshot_models.py write
+```
+
+Python dependency changes should update `requirements.txt` or `requirements-dev.txt` and may require updating the backend environment contract tests if the approved major/minor line changes.
+
+Frontend dependency changes should update both `frontend/package.json` and `frontend/package-lock.json`. Run `npm install` from `frontend/` instead of hand-editing the lockfile.
+
 ## Regression and Automation
 
 Backend tests include fast API/service tests, real ML inference tests, model snapshot verification, and baseline contract tests for runtime versions, dependency manifests, CI workflow shape, and deployment automation:
@@ -239,11 +291,21 @@ Frontend tests cover routes, API client behavior, and tooling contracts:
 
 ```bash
 cd frontend
+npm run lint
 npm test -- --run
 npm run build
 ```
 
-GitHub Actions runs split backend API, model snapshot/ML, frontend, and report-only dependency audit jobs on pushes and pull requests. Dependabot opens weekly update PRs for GitHub Actions, Python requirements, and frontend npm dependencies.
+### CI Jobs Explained
+
+GitHub Actions runs these jobs on pushes and pull requests:
+
+- `backend-api`: installs `fatigue_env` dependencies and runs fast non-ML backend tests.
+- `model-snapshot`: checks out Git LFS model artifacts, verifies `model_snapshot.json`, and runs real ML regression tests.
+- `frontend`: installs with `npm ci`, runs ESLint, runs Vitest, and builds the Vite app.
+- `dependency-audit`: writes Python and npm audit reports without blocking the PR.
+
+Dependabot opens weekly update PRs for GitHub Actions, Python requirements, and frontend npm dependencies.
 
 ## Project Structure
 

@@ -130,6 +130,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Run frontend lint
+        working-directory: frontend
+        run: npm run lint
+
       - name: Run frontend route and API tests
         working-directory: frontend
         run: npm test -- --run

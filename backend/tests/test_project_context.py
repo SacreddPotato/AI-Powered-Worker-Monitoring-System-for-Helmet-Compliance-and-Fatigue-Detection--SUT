@@ -63,5 +63,6 @@ def test_github_actions_runs_backend_regression_suite(root_dir):
     assert "snapshot_models.py verify" in text
     assert "python -m pytest -m ml -q" in text
     assert "python -m pytest -m \"not ml\" -q" in text
+    assert "npm run lint" in text
     assert "npm test -- --run" in text
     assert "npm run build" in text
