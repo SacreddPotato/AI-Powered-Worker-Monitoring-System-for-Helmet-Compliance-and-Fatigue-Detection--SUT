@@ -64,3 +64,8 @@ backend/ml_models/*.task
 
 # Model stats
 .modelStats/
+
+# documentation benchmark dataset cache
+.benchmark_data/
+docs/*
+.kaggle/

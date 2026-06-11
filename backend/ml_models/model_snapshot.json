@@ -9,8 +9,8 @@
         }
       ],
       "path": "backend/ml_models/best.pt",
-      "sha256": "2811645c56e0c469bdca537dbe3075385f2c35f9411c47afb44903cf86fca1a9",
-      "size_bytes": 6231786
+      "sha256": "fc5b5e4c249436f67bedd79e19609339cdd54448c92f51ee2b5ef93f4c0d8d37",
+      "size_bytes": 6254378
     },
     {
       "lfs_oid": "11fa19f2aea79bc960d680a13f82f22105982b325eb9e17a4a5e1a9f8245980a",
@@ -21,8 +21,8 @@
         }
       ],
       "path": "backend/ml_models/boots_detection.pt",
-      "sha256": "11fa19f2aea79bc960d680a13f82f22105982b325eb9e17a4a5e1a9f8245980a",
-      "size_bytes": 5563076
+      "sha256": "fc5b5e4c249436f67bedd79e19609339cdd54448c92f51ee2b5ef93f4c0d8d37",
+      "size_bytes": 6254378
     },
     {
       "lfs_oid": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
@@ -45,8 +45,8 @@
         }
       ],
       "path": "backend/ml_models/faceshield_detection.pt",
-      "sha256": "2744e94556a8a0ab7b1bd2a62b5ca8d48a0ddc5ff5f8ed182db0a17a64eba47d",
-      "size_bytes": 6219946
+      "sha256": "d769758252868be6901f5e46df9dd60693cfe796a2d1c6d88bcc7c74b85fa9e7",
+      "size_bytes": 6250538
     },
     {
       "lfs_oid": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
@@ -57,8 +57,8 @@
         }
       ],
       "path": "backend/ml_models/gloves_detection.pt",
-      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
-      "size_bytes": 5625014
+      "sha256": "fc5b5e4c249436f67bedd79e19609339cdd54448c92f51ee2b5ef93f4c0d8d37",
+      "size_bytes": 6254378
     },
     {
       "lfs_oid": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
@@ -69,8 +69,8 @@
         }
       ],
       "path": "backend/ml_models/goggles_detection.pt",
-      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
-      "size_bytes": 5625014
+      "sha256": "fc5b5e4c249436f67bedd79e19609339cdd54448c92f51ee2b5ef93f4c0d8d37",
+      "size_bytes": 6254378
     },
     {
       "lfs_oid": "7a31fb543f66ab46c03731e168595713ad91b3add2851d9898f2fbfb27d22877",
@@ -105,8 +105,8 @@
         }
       ],
       "path": "backend/ml_models/vest_detection.pt",
-      "sha256": "07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31",
-      "size_bytes": 5625014
+      "sha256": "fc5b5e4c249436f67bedd79e19609339cdd54448c92f51ee2b5ef93f4c0d8d37",
+      "size_bytes": 6254378
     },
     {
       "lfs_oid": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",

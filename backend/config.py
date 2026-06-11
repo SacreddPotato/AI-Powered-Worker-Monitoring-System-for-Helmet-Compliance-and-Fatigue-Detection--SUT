@@ -10,23 +10,17 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 DEV_VIDEO_DIR = UPLOADS_DIR / "dev_videos"
 ML_MODELS_DIR = BASE_DIR / "ml_models"
 
-HELMET_MODEL_URL = os.environ.get(
-    "HELMET_MODEL_URL",
-    "https://huggingface.co/keremberke/yolov8n-hard-hat-detection/resolve/main/best.pt",
-)
-PPE_MULTI_MODEL_URL = os.environ.get(
-    "PPE_MULTI_MODEL_URL",
-    "https://huggingface.co/Tanishjain9/yolov8n-ppe-detection-6classes/resolve/main/best.pt",
-)
+# Project-trained detector weights have no public download host; they are
+# committed via Git LFS. The env vars remain as optional overrides.
+HELMET_MODEL_URL = os.environ.get("HELMET_MODEL_URL", "")
+PPE_MULTI_MODEL_URL = os.environ.get("PPE_MULTI_MODEL_URL", "")
+VEST_MODEL_URL = os.environ.get("VEST_MODEL_URL", "")
 FATIGUE_MODEL_URL = os.environ.get("FATIGUE_MODEL_URL", "")
 PERSON_MODEL_URL = os.environ.get(
     "PERSON_MODEL_URL",
     "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt",
 )
-BOOTS_MODEL_URL = os.environ.get(
-    "BOOTS_MODEL_URL",
-    "https://huggingface.co/keremberke/yolov8n-boots-detection/resolve/main/best.pt",
-)
+BOOTS_MODEL_URL = os.environ.get("BOOTS_MODEL_URL", "")
 FACESHIELD_MODEL_URL = os.environ.get("FACESHIELD_MODEL_URL", "")
 SAFETY_SUIT_MODEL_URL = os.environ.get("SAFETY_SUIT_MODEL_URL", "")
 FACE_LANDMARKER_URL = os.environ.get(
@@ -37,7 +31,7 @@ FACE_LANDMARKER_URL = os.environ.get(
 MODEL_DEFINITIONS = {
     "helmet": {
         "display_name": "Helmet Detection",
-        "description": "Detects workers missing helmets using helmet + upper-body detection.",
+        "description": "Detects workers missing helmets using a project-trained YOLOv8n helmet detector + person matching.",
         "weights_path": str(ML_MODELS_DIR / "best.pt"),
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
         "download_urls": [HELMET_MODEL_URL, PPE_MULTI_MODEL_URL],
@@ -55,30 +49,33 @@ MODEL_DEFINITIONS = {
     },
     "vest": {
         "display_name": "Vest Detection",
-        "description": "Detects high-visibility safety vests and reads vest QR IDs.",
+        "description": "Detects high-visibility safety vests with a project-trained YOLOv8n model and reads vest QR IDs.",
         "weights_path": str(ML_MODELS_DIR / "vest_detection.pt"),
-        "download_urls": [PPE_MULTI_MODEL_URL],
+        "download_urls": [VEST_MODEL_URL],
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
         "person_download_urls": [PERSON_MODEL_URL],
-        "target_labels": ["vest", "safety vest", "safety_vest", "safety-vest"],
+        "target_labels": [
+            "vest", "safety vest", "safety_vest", "safety-vest",
+            "no_safety_vest", "no-safety vest", "no safety vest",
+        ],
     },
     "gloves": {
         "display_name": "Gloves Detection",
         "description": "Detects worker safety gloves.",
         "weights_path": str(ML_MODELS_DIR / "gloves_detection.pt"),
         "download_urls": [],
-        "target_labels": ["glove", "gloves", "no_glove", "no-glove"],
+        "target_labels": ["glove", "gloves", "no_glove", "no-glove", "no_gloves", "no gloves"],
     },
     "goggles": {
         "display_name": "Goggles Detection",
         "description": "Detects protective eyewear (goggles).",
         "weights_path": str(ML_MODELS_DIR / "goggles_detection.pt"),
         "download_urls": [],
-        "target_labels": ["goggles", "goggle", "no_goggles", "no-goggles"],
+        "target_labels": ["goggles", "goggle", "no_goggles", "no-goggles", "no_goggle", "no goggle"],
     },
     "boots": {
         "display_name": "Boot Detection",
-        "description": "Detects worker safety boots from MediaPipe foot regions using Ultralytics pretrained weights.",
+        "description": "Detects worker safety boots using a YOLOv8n model fine-tuned on the Ultralytics Construction-PPE dataset.",
         "weights_path": str(ML_MODELS_DIR / "boots_detection.pt"),
         "download_urls": [BOOTS_MODEL_URL],
         "target_labels": ["boot", "boots", "safety boot", "safety boots", "no_boot", "no-boots", "no boots"],
@@ -86,8 +83,11 @@ MODEL_DEFINITIONS = {
     },
     "faceshield": {
         "display_name": "Face Shield Detection",
-        "description": "Detects protective face shields.",
+        "description": "Detects protective face shields with a project-trained YOLOv8n model.",
         "weights_path": str(ML_MODELS_DIR / "faceshield_detection.pt"),
+        # Higher operating point than the global default: tuned on the SH17
+        # validation split for the best precision/recall balance.
+        "inference_confidence": 0.5,
         "download_urls": [FACESHIELD_MODEL_URL],
         "person_model_path": str(ML_MODELS_DIR / "yolov8n.pt"),
         "person_download_urls": [PERSON_MODEL_URL],

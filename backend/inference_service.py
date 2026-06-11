@@ -119,6 +119,14 @@ def _is_missing_label(label: str) -> bool:
     return normalized.startswith("no ") or normalized.startswith("without ")
 
 
+def _is_positive_helmet_label(label: str) -> bool:
+    normalized = _normalize_label(label)
+    if not normalized or _is_missing_label(normalized):
+        return False
+    compact = normalized.replace(" ", "")
+    return "helmet" in compact or "hardhat" in compact
+
+
 class PPEModelAdapter:
     def __init__(self, model_key: str, model_info: Dict):
         self.model_key = model_key
@@ -131,6 +139,7 @@ class PPEModelAdapter:
             _normalize_label(label) for label in model_info.get("target_labels", [])
         }
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
+        self.inference_confidence = float(model_info.get("inference_confidence", 0.35))
         self.supports_qr = model_key == "vest"
         self._absence_uses_features = model_key in {"gloves", "goggles", "boots"}
         self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
@@ -536,7 +545,7 @@ class PPEModelAdapter:
             return self._infer_boots_with_feature_regions(frame, camera_id=camera_id)
 
         try:
-            results = self._model(frame, conf=0.35, verbose=False)
+            results = self._model(frame, conf=self.inference_confidence, verbose=False)
             boxes = results[0].boxes or []
             names = results[0].names or {}
             selected_confidences = []
@@ -758,12 +767,17 @@ class HelmetModelAdapter(PPEModelAdapter):
             }
 
         try:
-            helmet_results = self._model(frame, conf=0.35, verbose=False)
+            helmet_results = self._model(frame, conf=self.inference_confidence, verbose=False)
             person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
-            helmet_boxes = [
-                tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),)
-                for box in helmet_results[0].boxes
-            ]
+            model_class_names = getattr(self._model, "names", None) or {}
+            helmet_boxes = []
+            for box in helmet_results[0].boxes:
+                class_name = _normalize_label(str(model_class_names.get(int(box.cls[0]), "")))
+                # Keep only positive helmet/hardhat classes; explicit absence
+                # classes (e.g. "no-hardhat") must not count as worn helmets.
+                if model_class_names and not _is_positive_helmet_label(class_name):
+                    continue
+                helmet_boxes.append(tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),))
             person_boxes = [
                 tuple(map(int, box.xyxy[0])) + (float(box.conf[0]),)
                 for box in person_results[0].boxes
