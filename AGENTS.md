@@ -28,6 +28,21 @@
 - `HelmetModelAdapter` counts only positive helmet/hardhat classes as worn helmets; explicit absence classes (e.g. `no_helmet`) are excluded by `_is_positive_helmet_label` so they can never be miscounted as compliance.
 - The explicit `no_*` classes of the multi-class model are weak (very few labeled training instances; `no_boots` produces no detections at all, making the boots key effectively a positive-presence classifier). Missing-PPE alerting therefore leans on the MediaPipe feature-region assists (gloves, goggles, boots) and the person-overlap fallback (vest, faceshield, safetysuit), which is intended behavior.
 
+## Live camera feeds
+- The dashboard streams over the `CameraStreamConsumer` WebSocket (`backend/cameras/consumers.py`), not the legacy HTTP MJPEG endpoint. Frames are annotated server-side and sent as binary JPEG.
+- **Auto-recovery:** the stream supervisor reconnects indefinitely. A session that delivers at least one frame resets the backoff; failed (re)connections emit the "No Signal" placeholder and retry with a capped exponential backoff. The stream only stops on client disconnect or when the camera is deleted/deactivated, so a feed that drops mid-session recovers on its own and never needs the URL re-added. (Previously the consumer gave up after 3 cumulative drops, which is what forced manual re-adding.) `DjangoCameraService.stream_frames` (`backend/cameras/services.py`) reconnects the same way.
+- Stream tunables (env): `CAMERA_RECONNECT_BACKOFF_MIN_SECONDS` (0.5), `CAMERA_RECONNECT_BACKOFF_MAX_SECONDS` (5), `CAMERA_MAX_READ_FAILURES` (15), `CAMERA_COUNTING_INTERVAL_MS` (300), plus existing `CAMERA_STREAM_FPS` and `CAMERA_INFERENCE_INTERVAL_MS`.
+
+## People-counting zones
+- Users draw rectangular zones on a feed; each zone counts how many people pass through it. A count is incremented per **entry event** — a tracked person's centroid crossing from outside to inside the zone — so lingering is not recounted but leaving and re-entering counts again. Multiple zones per camera; counts persist across restarts and can be reset per zone.
+- **Model:** `cameras.CountingZone` (FK → Camera `counting_zones`, normalized `x1,y1,x2,y2` in 0..1, persisted `count`). Migration `cameras/migrations/0002_countingzone.py`.
+- **API:** `GET/POST /api/v1/cameras/{id}/zones/`, `GET/PUT/PATCH/DELETE /api/v1/cameras/{id}/zones/{zone_id}/`, and `POST /api/v1/cameras/{id}/zones/{zone_id}/reset/`. Coordinates are validated normalized (`0 ≤ x1 < x2 ≤ 1`, same for y).
+- **Counting engine:** `backend/people_counting.py` is pure Python (no cv2 / Django / ML imports) — `CentroidTracker` (greedy nearest-centroid association across inference cycles) + `ZoneCounter` (outside→inside transition counting). `backend/cameras/counting.py` is the Django-aware, in-memory, per-camera runtime that drives the engine from person detections and flushes increments to the `CountingZone` rows.
+- **Person detection:** `detection.services.detect_people()` lazily loads the shared `yolov8n` person detector and is invoked only when a camera has ≥1 zone. The torch/ultralytics imports stay deferred so the counting modules import cheaply (and the non-ML test suite never loads them).
+- **Drawing:** `annotation.draw_counting_zones()` burns each zone box plus `"{name}: {count}"` on its top border into every frame, so the box is always visible regardless of which PPE overlays are toggled.
+- **Frontend:** `CameraFeed.jsx` has a "ZONES" mode (drag on the feed to draw — coordinates are captured `object-cover`-aware so the zone lands where dragged — with a per-zone reset/delete panel) and `api.js` gains `listZones/createZone/updateZone/deleteZone/resetZone`.
+- **Caveats:** counting state is in-memory and single-process (like `inference_status`); the DB row is the durable record. The per-camera runtime is shared across consumers, so two simultaneous viewers of the same camera would feed one tracker — fine for the dashboard (each camera is rendered once) but not designed for multi-viewer counting. Tracking is centroid-based at the throttled inference cadence; very fast motion between samples can be missed.
+
 ## Benchmarks
 - `scripts/documentation_benchmarks/` evaluates the configured weights against independently labeled public datasets: `run_all.py` runs everything; per-model `benchmark_<key>.py` scripts exist but overwrite `summary.csv` with only their own rows, so prefer `run_all.py` (or merge against `manifest.json`) when refreshing a subset.
 - Outputs land in `docs/benchmark_results/`: per-model `metrics.json`, `confusion_matrix.png`, annotated TP/FP/FN examples, plus top-level `summary.csv` and `manifest.json`.
@@ -48,6 +63,7 @@
 ## Verification
 - Run backend tests with `conda run -n fatigue_env python -m pytest`.
 - Run targeted ML tests with `conda run -n fatigue_env python -m pytest -m ml`.
+- The counting-zone feature ships non-ML tests: `backend/tests/test_people_counting.py` (pure tracking/zone-entry engine) and `backend/tests/test_counting_zones.py` (zone REST API, counting-manager integration, and zone drawing). They run under `python -m pytest -m "not ml"` and do not need torch/ultralytics/mediapipe.
 - Run frontend lint with `cd frontend && npm run lint`.
 - Run frontend tests/build with `cd frontend && npm test -- --run && npm run build`.
 - Baseline contract tests guard Python/package major-minor versions, dependency manifests, frontend tooling, CI workflow shape, and deployment automation. The environment-contract tests pass only in the pinned `fatigue_env` (Python 3.10); newer local interpreters fail them by design.

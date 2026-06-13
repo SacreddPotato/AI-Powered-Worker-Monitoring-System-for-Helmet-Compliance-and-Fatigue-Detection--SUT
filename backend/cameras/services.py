@@ -1,5 +1,6 @@
 """Wraps existing camera_service.py for Django views."""
 import logging
+import os
 import re
 import socket
 import sys
@@ -21,8 +22,11 @@ _BACKENDS = (
     [cv2.CAP_DSHOW, cv2.CAP_ANY] if _IS_WINDOWS else [cv2.CAP_ANY]
 )
 
-_MAX_RETRIES = 3
-_RETRY_DELAY = 0.5  # seconds
+_MAX_RETRIES = 3  # retained for compatibility; streaming now reconnects indefinitely
+_RETRY_DELAY = 0.5  # seconds — initial reconnect backoff
+_RECONNECT_BACKOFF_MAX = max(
+    _RETRY_DELAY, float(os.environ.get("CAMERA_RECONNECT_BACKOFF_MAX_SECONDS", "5"))
+)
 
 _HOST_PORT_RE = re.compile(r"^[A-Za-z0-9._-]+(?::\d+)?(?:/.*)?$")
 
@@ -173,30 +177,27 @@ class DjangoCameraService:
         """Yield JPEG-encoded frames.  If annotate_fn is provided, each raw
         numpy frame is passed through it before encoding.
 
-        Retries up to _MAX_RETRIES times if the camera connection drops.
-        Yields a 'No Signal' placeholder while reconnecting so the MJPEG
-        stream never goes blank."""
+        Reconnects indefinitely if the camera connection drops, with a capped
+        exponential backoff and a 'No Signal' placeholder emitted while
+        reconnecting, so the stream never goes permanently blank and recovers on
+        its own once the camera is reachable again.  The generator is terminated
+        when the client disconnects (GeneratorExit)."""
         source = _to_capture_source(source_url)
         no_signal = _no_signal_frame()
         _, placeholder_jpg = cv2.imencode('.jpg', no_signal)
         placeholder = placeholder_jpg.tobytes()
 
-        retries = 0
-        while retries < _MAX_RETRIES:
+        backoff = _RETRY_DELAY
+        while True:
             capture = _open_capture(source)
             if capture is None:
-                logger.warning(
-                    "Camera %s: failed to open (attempt %d/%d)",
-                    source, retries + 1, _MAX_RETRIES,
-                )
-                # Yield placeholder so the stream isn't blank
+                logger.warning("Camera %s: failed to open, retrying in %.1fs", source, backoff)
                 yield placeholder
-                retries += 1
-                time.sleep(_RETRY_DELAY)
+                time.sleep(backoff)
+                backoff = min(backoff * 2, _RECONNECT_BACKOFF_MAX)
                 continue
 
-            # Successful connection — reset retries
-            retries = 0
+            delivered = False
             consecutive_failures = 0
             try:
                 while True:
@@ -222,20 +223,16 @@ class DjangoCameraService:
                         yield placeholder
                         continue
                     yield jpeg.tobytes()
+                    delivered = True
             finally:
                 capture.release()
 
-            # If we broke out of the inner loop, try reconnecting
-            retries += 1
-            if retries < _MAX_RETRIES:
-                logger.info("Camera %s: reconnecting (attempt %d/%d)", source, retries + 1, _MAX_RETRIES)
-                time.sleep(_RETRY_DELAY)
-
-        # Exhausted retries — yield a few more placeholders then exit
-        logger.error("Camera %s: giving up after %d reconnect attempts", source, _MAX_RETRIES)
-        for _ in range(30):  # ~1 second of placeholder frames
+            # A healthy session resets the backoff so transient drops never
+            # accumulate into a permanent give-up.
+            backoff = _RETRY_DELAY if delivered else min(backoff * 2, _RECONNECT_BACKOFF_MAX)
+            logger.info("Camera %s: reconnecting in %.1fs", source, backoff)
             yield placeholder
-            time.sleep(0.033)
+            time.sleep(backoff)
 
     @staticmethod
     def discover_devices(max_index=10):

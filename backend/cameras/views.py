@@ -1,12 +1,13 @@
 import threading
 import cv2
 from django.http import StreamingHttpResponse
-from rest_framework import viewsets
-from rest_framework.decorators import action
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
-from .models import Camera
-from .serializers import CameraSerializer
+from .models import Camera, CountingZone
+from .serializers import CameraSerializer, CountingZoneSerializer
 from .services import get_camera_service
+from . import counting
 
 
 def _make_annotator(camera_id, overlays_csv):
@@ -70,6 +71,60 @@ def _make_annotator(camera_id, overlays_csv):
             return frame  # raw frame on any inference error
 
     return annotate
+
+
+@api_view(['GET', 'POST'])
+def camera_zones_view(request, camera_id):
+    """List counting zones for a camera, or create a new one."""
+    try:
+        camera = Camera.objects.get(pk=camera_id)
+    except Camera.DoesNotExist:
+        return Response({'error': 'Camera not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        zones = CountingZone.objects.filter(camera=camera)
+        return Response(CountingZoneSerializer(zones, many=True).data)
+
+    serializer = CountingZoneSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    zone = serializer.save(camera=camera)
+    return Response(CountingZoneSerializer(zone).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+def camera_zone_detail_view(request, camera_id, zone_id):
+    """Retrieve, update, or delete a single counting zone."""
+    try:
+        zone = CountingZone.objects.get(pk=zone_id, camera_id=camera_id)
+    except CountingZone.DoesNotExist:
+        return Response({'error': 'Counting zone not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'DELETE':
+        zone.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    if request.method == 'GET':
+        return Response(CountingZoneSerializer(zone).data)
+
+    partial = request.method == 'PATCH'
+    serializer = CountingZoneSerializer(zone, data=request.data, partial=partial)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response(CountingZoneSerializer(zone).data)
+
+
+@api_view(['POST'])
+def camera_zone_reset_view(request, camera_id, zone_id):
+    """Reset a counting zone's cumulative count back to zero."""
+    try:
+        zone = CountingZone.objects.get(pk=zone_id, camera_id=camera_id)
+    except CountingZone.DoesNotExist:
+        return Response({'error': 'Counting zone not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    zone.count = 0
+    zone.save(update_fields=['count', 'updated_at'])
+    counting.reset_zone(int(camera_id), int(zone_id))
+    return Response(CountingZoneSerializer(zone).data)
 
 
 class CameraViewSet(viewsets.ModelViewSet):

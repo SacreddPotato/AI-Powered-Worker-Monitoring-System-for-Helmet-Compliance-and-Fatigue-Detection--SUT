@@ -68,6 +68,17 @@ export const api = {
     }
   },
 
+  // Counting zones
+  listZones: (cameraId) => request(`/cameras/${cameraId}/zones/`),
+  createZone: (cameraId, data) =>
+    request(`/cameras/${cameraId}/zones/`, { method: "POST", body: JSON.stringify(data) }),
+  updateZone: (cameraId, zoneId, data) =>
+    request(`/cameras/${cameraId}/zones/${zoneId}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteZone: (cameraId, zoneId) =>
+    request(`/cameras/${cameraId}/zones/${zoneId}/`, { method: "DELETE" }),
+  resetZone: (cameraId, zoneId) =>
+    request(`/cameras/${cameraId}/zones/${zoneId}/reset/`, { method: "POST" }),
+
   cameraStreamUrl: (id, overlays = []) => {
     const params = new URLSearchParams();
     if (overlays.length > 0) {

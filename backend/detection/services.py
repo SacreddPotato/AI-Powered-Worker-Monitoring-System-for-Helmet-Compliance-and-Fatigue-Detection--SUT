@@ -89,6 +89,80 @@ def get_inference_service():
     return _inference_service
 
 
+class _PersonDetector:
+    """Lazily-loaded YOLO person detector shared by the counting-zone feature.
+
+    Reuses the configured ``yolov8n`` person weights.  Heavy imports (torch /
+    ultralytics) happen on first use, so importing this module stays cheap and the
+    detector is only ever loaded when a camera actually has counting zones.
+    """
+
+    def __init__(self):
+        self._model = None
+        self._device = None
+        self.load_error = None
+        self._lock = threading.Lock()
+
+    @property
+    def available(self):
+        return self._model is not None
+
+    def _ensure_loaded(self):
+        if self._model is not None or self.load_error is not None:
+            return
+        with self._lock:
+            if self._model is not None or self.load_error is not None:
+                return
+            try:
+                import config
+                from inference_service import _load_yolo_model
+                from inference_device import resolve_inference_device
+
+                person_path = (
+                    MODEL_DEFINITIONS.get('helmet', {}).get('person_model_path')
+                    or str(config.ML_MODELS_DIR / 'yolov8n.pt')
+                )
+                self._device = resolve_inference_device()
+                self._model = _load_yolo_model(person_path)
+            except Exception as exc:  # pragma: no cover - depends on ML stack
+                self.load_error = str(exc)
+
+    def detect(self, frame):
+        """Return a list of ``(x1, y1, x2, y2, confidence)`` person boxes."""
+        self._ensure_loaded()
+        if self._model is None:
+            return []
+        try:
+            results = self._model(
+                frame, classes=[0], conf=0.35, device=self._device, verbose=False
+            )
+            boxes = []
+            for box in results[0].boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                boxes.append((x1, y1, x2, y2, float(box.conf[0])))
+            return boxes
+        except Exception:  # pragma: no cover - depends on ML stack
+            return []
+
+
+_person_detector = None
+_person_detector_lock = threading.Lock()
+
+
+def get_person_detector():
+    global _person_detector
+    if _person_detector is None:
+        with _person_detector_lock:
+            if _person_detector is None:
+                _person_detector = _PersonDetector()
+    return _person_detector
+
+
+def detect_people(frame):
+    """Convenience wrapper: person boxes for the counting-zone feature."""
+    return get_person_detector().detect(frame)
+
+
 def get_model_definitions():
     return MODEL_DEFINITIONS
 

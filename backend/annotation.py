@@ -56,6 +56,53 @@ def _label_box(frame, text, x1, y1, color):
     cv2.putText(frame, text, (x1 + 2, y1 - 3), _FONT, 0.48, (0, 0, 0), 1, cv2.LINE_AA)
 
 
+# Counting zones use a distinct magenta so they never blend into PPE detection
+# boxes (which are green/red/blue/yellow/cyan).
+_ZONE_COLOR = (235, 70, 255)  # BGR
+
+
+def draw_counting_zones(frame, zones):
+    """Draw people-counting zones onto ``frame`` (in place) and return it.
+
+    Each zone is always drawn — independent of PPE overlay toggles — so the box
+    stays visible at all times, with its current count rendered on the top border.
+
+    Args:
+        frame: numpy BGR image (modified in place).
+        zones: iterable of dicts with normalized ``x1,y1,x2,y2`` (0..1), ``name``
+            and ``count``.
+    """
+    if not zones:
+        return frame
+
+    height, width = frame.shape[:2]
+    for zone in zones:
+        x1 = max(0, min(width - 1, int(round(float(zone['x1']) * width))))
+        y1 = max(0, min(height - 1, int(round(float(zone['y1']) * height))))
+        x2 = max(0, min(width - 1, int(round(float(zone['x2']) * width))))
+        y2 = max(0, min(height - 1, int(round(float(zone['y2']) * height))))
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), _ZONE_COLOR, 2)
+
+        label = f"{zone.get('name') or 'Zone'}: {int(zone.get('count', 0))}"
+        (tw, th), _ = cv2.getTextSize(label, _FONT, 0.5, 1)
+        banner_h = th + 9
+        banner_x2 = min(width, x1 + tw + 10)
+        if y1 - banner_h >= 0:
+            # Banner sits on the top border, above the box.
+            cv2.rectangle(frame, (x1, y1 - banner_h), (banner_x2, y1), _ZONE_COLOR, -1)
+            text_y = y1 - 5
+        else:
+            # Box hugs the top of the frame — drop the banner just inside it.
+            cv2.rectangle(frame, (x1, y1), (banner_x2, y1 + banner_h), _ZONE_COLOR, -1)
+            text_y = y1 + th + 4
+        cv2.putText(frame, label, (x1 + 5, text_y), _FONT, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+
+    return frame
+
+
 def _draw_ppe_boxes(frame, payload, model_key):
     default_color = _MODEL_COLORS.get(model_key, _COLORS['white'])
     for box in payload.get('boxes', []):

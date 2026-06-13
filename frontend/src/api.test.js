@@ -60,6 +60,20 @@ describe("api client", () => {
     expect(fetch).toHaveBeenCalledWith("/api/v1/dev/images/12/analyze/", expect.objectContaining({ method: "POST" }));
   });
 
+  it("calls counting-zone endpoints", async () => {
+    await api.listZones(4);
+    await api.createZone(4, { name: "Entry", x1: 0.1, y1: 0.1, x2: 0.5, y2: 0.6 });
+    await api.updateZone(4, 2, { name: "Main" });
+    await api.resetZone(4, 2);
+    await api.deleteZone(4, 2);
+
+    expect(fetch).toHaveBeenCalledWith("/api/v1/cameras/4/zones/", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/cameras/4/zones/", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/cameras/4/zones/2/", expect.objectContaining({ method: "PATCH" }));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/cameras/4/zones/2/reset/", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/cameras/4/zones/2/", expect.objectContaining({ method: "DELETE" }));
+  });
+
   it("builds stream URLs with overlays", () => {
     expect(api.cameraStreamUrl(4, ["helmet", "fatigue"])).toContain("/api/v1/cameras/4/stream/");
     expect(api.cameraStreamUrl(4, ["helmet", "fatigue"])).toContain("annotated=1");
