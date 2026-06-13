@@ -1,10 +1,24 @@
 from rest_framework import serializers
-from .models import DevVideo
+from .models import DevImage, DevVideo
 
 class DevVideoSerializer(serializers.ModelSerializer):
     class Meta:
         model = DevVideo
         fields = ['id', 'original_filename', 'file_size', 'duration', 'uploaded_at']
+
+
+class DevImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DevImage
+        fields = [
+            'id',
+            'original_filename',
+            'file_size',
+            'content_type',
+            'width',
+            'height',
+            'uploaded_at',
+        ]
 
 class ThresholdSerializer(serializers.Serializer):
     confidence = serializers.FloatField(required=False)

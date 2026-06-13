@@ -1,0 +1,635 @@
+{
+  "generated_at": "2026-06-12T15:58:00.527557+00:00",
+  "generated_by": "scripts/generate_model_output_examples.py",
+  "legend": {
+    "green": "confirmed PPE/model-positive output",
+    "red": "missing-PPE or fatigue alert output",
+    "orange": "missed ground truth where benchmark fallback images are used",
+    "blue_cyan": "supporting person/pose/feature regions"
+  },
+  "models": {
+    "helmet": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\helmet\\positive.jpg",
+        "source": "docs/benchmark_assets/images/test/image182.jpg",
+        "status": "ok",
+        "detected": false,
+        "confidence": 0.0,
+        "note": ""
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\helmet\\negative.jpg",
+        "source": "docs/benchmark_assets/images/test/image1205.jpg",
+        "status": "ok",
+        "detected": true,
+        "confidence": 0.9142,
+        "note": ""
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\helmet\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "helmet",
+        "weights": "backend/ml_models/best.pt",
+        "dataset": "construction-ppe",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Project-trained helmet detector vs Construction-PPE held-out test split (in-domain).",
+        "model_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "split": "test",
+        "images_evaluated": 141,
+        "dataset_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "gt_class_ids": {
+          "helmet": [
+            0
+          ],
+          "no_helmet": [
+            7
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "helmet": {
+            "tp": 173,
+            "fp": 19,
+            "fn": 19,
+            "n_gt": 192,
+            "n_pred": 192,
+            "precision": 0.901,
+            "recall": 0.901,
+            "f1": 0.901,
+            "accuracy": 0.8199,
+            "mean_tp_confidence": 0.7954
+          },
+          "no_helmet": {
+            "tp": 3,
+            "fp": 7,
+            "fn": 37,
+            "n_gt": 40,
+            "n_pred": 10,
+            "precision": 0.3,
+            "recall": 0.075,
+            "f1": 0.12,
+            "accuracy": 0.0638,
+            "mean_tp_confidence": 0.4385
+          }
+        }
+      }
+    },
+    "vest": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\vest\\positive.jpg",
+        "source": "docs/benchmark_assets/images/test/image1037.jpeg",
+        "status": "ok",
+        "detected": false,
+        "confidence": 0.8008,
+        "note": ""
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\vest\\negative.jpg",
+        "source": "docs/benchmark_assets/images/test/image116.jpg",
+        "status": "ok",
+        "detected": true,
+        "confidence": 0.795,
+        "note": ""
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\vest\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "vest",
+        "weights": "backend/ml_models/vest_detection.pt",
+        "dataset": "construction-ppe",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Project-trained vest detector vs Construction-PPE held-out test split (in-domain).",
+        "model_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "split": "test",
+        "images_evaluated": 141,
+        "dataset_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "gt_class_ids": {
+          "vest": [
+            2
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "vest": {
+            "tp": 153,
+            "fp": 21,
+            "fn": 25,
+            "n_gt": 178,
+            "n_pred": 174,
+            "precision": 0.8793,
+            "recall": 0.8596,
+            "f1": 0.8693,
+            "accuracy": 0.7688,
+            "mean_tp_confidence": 0.8119
+          }
+        }
+      }
+    },
+    "gloves": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\gloves\\positive.jpg",
+        "source": "docs/benchmark_results/gloves/examples/image116.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark TP example reused because no clean app-positive frame was found"
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\gloves\\negative.jpg",
+        "source": "docs/benchmark_results/gloves/examples/image1264.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark negative/error example reused because no clean app-negative frame was found"
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\gloves\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "gloves",
+        "weights": "backend/ml_models/gloves_detection.pt",
+        "dataset": "construction-ppe",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Project-trained gloves detector vs Construction-PPE held-out test split (in-domain).",
+        "model_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "split": "test",
+        "images_evaluated": 141,
+        "dataset_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "gt_class_ids": {
+          "gloves": [
+            1
+          ],
+          "no_gloves": [
+            9
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "gloves": {
+            "tp": 118,
+            "fp": 11,
+            "fn": 45,
+            "n_gt": 163,
+            "n_pred": 129,
+            "precision": 0.9147,
+            "recall": 0.7239,
+            "f1": 0.8082,
+            "accuracy": 0.6782,
+            "mean_tp_confidence": 0.7065
+          },
+          "no_gloves": {
+            "tp": 5,
+            "fp": 6,
+            "fn": 53,
+            "n_gt": 58,
+            "n_pred": 11,
+            "precision": 0.4545,
+            "recall": 0.0862,
+            "f1": 0.1449,
+            "accuracy": 0.0781,
+            "mean_tp_confidence": 0.4671
+          }
+        }
+      }
+    },
+    "goggles": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\goggles\\positive.jpg",
+        "source": "docs/benchmark_results/goggles/examples/image1235.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark TP example reused because no clean app-positive frame was found"
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\goggles\\negative.jpg",
+        "source": "docs/benchmark_results/goggles/examples/image1270.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark negative/error example reused because no clean app-negative frame was found"
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\goggles\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "goggles",
+        "weights": "backend/ml_models/goggles_detection.pt",
+        "dataset": "construction-ppe",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Project-trained goggles detector vs Construction-PPE held-out test split (in-domain).",
+        "model_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "split": "test",
+        "images_evaluated": 141,
+        "dataset_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "gt_class_ids": {
+          "goggles": [
+            4
+          ],
+          "no_goggle": [
+            8
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "goggles": {
+            "tp": 37,
+            "fp": 5,
+            "fn": 15,
+            "n_gt": 52,
+            "n_pred": 42,
+            "precision": 0.881,
+            "recall": 0.7115,
+            "f1": 0.7872,
+            "accuracy": 0.6491,
+            "mean_tp_confidence": 0.5905
+          },
+          "no_goggle": {
+            "tp": 1,
+            "fp": 1,
+            "fn": 32,
+            "n_gt": 33,
+            "n_pred": 2,
+            "precision": 0.5,
+            "recall": 0.0303,
+            "f1": 0.0571,
+            "accuracy": 0.0294,
+            "mean_tp_confidence": 0.3667
+          }
+        }
+      }
+    },
+    "boots": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\boots\\positive.jpg",
+        "source": "docs/benchmark_results/boots/examples/image1264.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark TP example reused because no clean app-positive frame was found"
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\boots\\negative.jpg",
+        "source": "docs/benchmark_results/boots/examples/image1264.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark negative/error example reused because no clean app-negative frame was found"
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\boots\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "boots",
+        "weights": "backend/ml_models/boots_detection.pt",
+        "dataset": "construction-ppe",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Project-trained boots detector vs Construction-PPE held-out test split (in-domain).",
+        "model_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "split": "test",
+        "images_evaluated": 141,
+        "dataset_classes": {
+          "0": "helmet",
+          "1": "gloves",
+          "2": "vest",
+          "3": "boots",
+          "4": "goggles",
+          "5": "none",
+          "6": "Person",
+          "7": "no_helmet",
+          "8": "no_goggle",
+          "9": "no_gloves",
+          "10": "no_boots"
+        },
+        "gt_class_ids": {
+          "boots": [
+            3
+          ],
+          "no_boots": [
+            10
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "boots": {
+            "tp": 143,
+            "fp": 34,
+            "fn": 68,
+            "n_gt": 211,
+            "n_pred": 177,
+            "precision": 0.8079,
+            "recall": 0.6777,
+            "f1": 0.7371,
+            "accuracy": 0.5837,
+            "mean_tp_confidence": 0.7519
+          },
+          "no_boots": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 23,
+            "n_gt": 23,
+            "n_pred": 0,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "accuracy": 0.0,
+            "mean_tp_confidence": null
+          }
+        }
+      }
+    },
+    "faceshield": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\faceshield\\positive.jpg",
+        "source": "docs/benchmark_results/faceshield/examples/pexels-photo-1869580.jpg",
+        "status": "benchmark_fallback",
+        "detected": null,
+        "confidence": null,
+        "note": "benchmark TP example reused because no clean app-positive frame was found"
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\faceshield\\negative.jpg",
+        "source": "docs/benchmark_results/faceshield/examples/pexels-photo-11143306.jpg",
+        "status": "ok",
+        "detected": true,
+        "confidence": 0.72,
+        "note": ""
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\faceshield\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "faceshield",
+        "weights": "backend/ml_models/faceshield_detection.pt",
+        "dataset": "sh17",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.5,
+        "notes": "Project-trained face-shield detector vs SH17 held-out validation split (in-domain).",
+        "model_classes": {
+          "0": "faceshield"
+        },
+        "split": "val",
+        "images_evaluated": 1620,
+        "dataset_classes": {
+          "0": "person",
+          "1": "ear",
+          "2": "ear-mufs",
+          "3": "face",
+          "4": "face-guard",
+          "5": "face-mask",
+          "6": "foot",
+          "7": "tool",
+          "8": "glasses",
+          "9": "gloves",
+          "10": "helmet",
+          "11": "hands",
+          "12": "head",
+          "13": "medical-suit",
+          "14": "shoes",
+          "15": "safety-suit",
+          "16": "safety-vest"
+        },
+        "gt_class_ids": {
+          "faceshield": [
+            4
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "faceshield": {
+            "tp": 6,
+            "fp": 17,
+            "fn": 18,
+            "n_gt": 24,
+            "n_pred": 23,
+            "precision": 0.2609,
+            "recall": 0.25,
+            "f1": 0.2553,
+            "accuracy": 0.1463,
+            "mean_tp_confidence": 0.7543
+          }
+        }
+      }
+    },
+    "safetysuit": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\safetysuit\\positive.jpg",
+        "source": "docs/benchmark_assets/images/test/image167.jpg",
+        "status": "ok",
+        "detected": false,
+        "confidence": 0.7409,
+        "note": "",
+        "benchmark_limitation": "Benchmark metrics report 0 detector true-positive matches; this image demonstrates deployed app output only."
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\safetysuit\\negative.jpg",
+        "source": "docs/benchmark_results/safetysuit/examples/pexels-photo-11015459.jpg",
+        "status": "ok",
+        "detected": true,
+        "confidence": 0.8933,
+        "note": ""
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\safetysuit\\contact_sheet.jpg"
+      },
+      "metrics": {
+        "model_key": "safetysuit",
+        "weights": "backend/ml_models/safety_suit_detection.pt",
+        "dataset": "sh17",
+        "iou_threshold": 0.5,
+        "conf_threshold": 0.35,
+        "notes": "Safety suit weights vs SH17 'safety-suit' class (Kaggle; skipped when unavailable).",
+        "model_classes": {
+          "0": "safety_suit",
+          "1": "safety_vest"
+        },
+        "split": "val",
+        "images_evaluated": 1620,
+        "dataset_classes": {
+          "0": "person",
+          "1": "ear",
+          "2": "ear-mufs",
+          "3": "face",
+          "4": "face-guard",
+          "5": "face-mask",
+          "6": "foot",
+          "7": "tool",
+          "8": "glasses",
+          "9": "gloves",
+          "10": "helmet",
+          "11": "hands",
+          "12": "head",
+          "13": "medical-suit",
+          "14": "shoes",
+          "15": "safety-suit",
+          "16": "safety-vest"
+        },
+        "gt_class_ids": {
+          "safetysuit": [
+            15
+          ]
+        },
+        "status": "ok",
+        "per_class": {
+          "safetysuit": {
+            "tp": 0,
+            "fp": 10,
+            "fn": 45,
+            "n_gt": 45,
+            "n_pred": 10,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "accuracy": 0.0,
+            "mean_tp_confidence": null
+          }
+        }
+      }
+    },
+    "fatigue": {
+      "positive": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\fatigue\\positive.jpg",
+        "source": "backend/uploads/dev_videos/2bb51f15dfaf43adbed60925b63efc31_Video For Practicing Eye Contact.mp4",
+        "frame_index": 1666,
+        "status": "ok",
+        "detected": false,
+        "confidence": 0.0591,
+        "hybrid_score": 0.0591,
+        "note": "MediaPipe Tasks reported \"function 'free' not found\"; documentation used OpenCV face localization with Swin output."
+      },
+      "negative": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\fatigue\\negative.jpg",
+        "source": "backend/uploads/dev_videos/2bb51f15dfaf43adbed60925b63efc31_Video For Practicing Eye Contact.mp4",
+        "frame_index": 5000,
+        "status": "ok",
+        "detected": false,
+        "confidence": 0.1107,
+        "hybrid_score": 0.1107,
+        "note": "MediaPipe Tasks reported \"function 'free' not found\"; documentation used OpenCV face localization with Swin output. Highest sampled hybrid score did not cross the fatigue threshold."
+      },
+      "contact_sheet": {
+        "path": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\model_output_examples\\fatigue\\contact_sheet.jpg"
+      },
+      "training_evidence": {
+        "benchmarks": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\fatigue-benchmarks.jpeg",
+        "confusion_matrix": "C:\\Users\\ahmed\\Documents\\fatigueDeployment\\AI-Powered-Worker-Monitoring-System-for-Helmet-Compliance-and-Fatigue-Detection--SUT\\docs\\fatigue-confusion-matrix.jpeg"
+      },
+      "pipeline_note": "Production FatigueModelAdapter was invoked first but returned no_face because MediaPipe Tasks failed in this environment. Documentation images therefore use OpenCV face localization plus the configured Swin model."
+    }
+  }
+}

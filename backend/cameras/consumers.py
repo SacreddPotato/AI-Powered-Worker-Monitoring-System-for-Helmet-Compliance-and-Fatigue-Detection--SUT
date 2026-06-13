@@ -229,7 +229,13 @@ class CameraStreamConsumer(WebsocketConsumer):
             now = time.monotonic()
             should_launch = False
             with state_lock:
-                due = (now - last_inference_ts["value"]) >= inference_interval_seconds
+                import config as cfg
+                low_latency_mode = bool(getattr(cfg, "LOW_LATENCY_MODE", True))
+                due = (
+                    (now - last_inference_ts["value"]) >= inference_interval_seconds
+                    if low_latency_mode
+                    else True
+                )
                 if due and not inference_inflight["value"]:
                     inference_inflight["value"] = True
                     should_launch = True

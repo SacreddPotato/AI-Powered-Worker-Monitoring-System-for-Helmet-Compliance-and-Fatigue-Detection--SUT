@@ -40,7 +40,13 @@ describe("api client", () => {
     await api.acknowledgeAlert(9);
     await api.analyze(3);
     await api.getThresholds();
-    await api.updateThresholds({ confidence: 0.5 });
+    await api.updateThresholds({
+      confidence: 0.5,
+      low_latency_mode: false,
+      temporal_smoothing_enabled: true,
+    });
+    await api.uploadImage(new File(["image"], "frame.png", { type: "image/png" }));
+    await api.analyzeImage(12);
 
     expect(fetch).toHaveBeenCalledWith("/api/v1/models/", expect.any(Object));
     expect(fetch).toHaveBeenCalledWith("/api/v1/models/helmet/", expect.objectContaining({ method: "PUT" }));
@@ -50,6 +56,8 @@ describe("api client", () => {
     expect(fetch).toHaveBeenCalledWith("/api/v1/detections/analyze/", expect.objectContaining({ method: "POST" }));
     expect(fetch).toHaveBeenCalledWith("/api/v1/dev/thresholds/", expect.any(Object));
     expect(fetch).toHaveBeenCalledWith("/api/v1/dev/thresholds/", expect.objectContaining({ method: "PUT" }));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/dev/images/", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith("/api/v1/dev/images/12/analyze/", expect.objectContaining({ method: "POST" }));
   });
 
   it("builds stream URLs with overlays", () => {
@@ -59,5 +67,6 @@ describe("api client", () => {
 
     expect(api.videoStreamUrl(8, ["vest"])).toContain("/api/v1/dev/videos/8/stream/");
     expect(api.videoFileUrl(8)).toContain("/api/v1/dev/videos/8/file/");
+    expect(api.imageFileUrl(9)).toContain("/api/v1/dev/images/9/file/");
   });
 });

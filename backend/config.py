@@ -10,6 +10,13 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 DEV_VIDEO_DIR = UPLOADS_DIR / "dev_videos"
 ML_MODELS_DIR = BASE_DIR / "ml_models"
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
 # Project-trained detector weights have no public download host; they are
 # committed via Git LFS. The env vars remain as optional overrides.
 HELMET_MODEL_URL = os.environ.get("HELMET_MODEL_URL", "")
@@ -109,6 +116,10 @@ MODEL_DEFINITIONS = {
 DEFAULT_ALERT_CONFIDENCE_THRESHOLD = 0.45
 FATIGUE_CONSECUTIVE_FRAMES_THRESHOLD = 8
 HEAD_TILT_ALERT_DEGREES = 15.0
+LOW_LATENCY_MODE = _env_bool("SAFEVISION_LOW_LATENCY_MODE", True)
+TEMPORAL_SMOOTHING_ENABLED = _env_bool("SAFEVISION_TEMPORAL_SMOOTHING_ENABLED", False)
+TEMPORAL_SMOOTHING_REQUIRED_FRAMES = 2
+TEMPORAL_SMOOTHING_STALE_SECONDS = 5.0
 
 
 def ensure_ml_models_layout() -> None:

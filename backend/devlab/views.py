@@ -9,11 +9,15 @@ from django.http import FileResponse, StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import DevVideo
-from .serializers import DevVideoSerializer, ThresholdSerializer
-from detection.services import get_inference_service, get_model_definitions
+from .models import DevImage, DevVideo
+from .serializers import DevImageSerializer, DevVideoSerializer, ThresholdSerializer
+from detection.services import get_inference_service, get_globally_enabled_model_keys, get_model_definitions
 
 UPLOAD_DIR = os.path.join(settings.MEDIA_ROOT, 'dev_videos')
+
+
+def _dev_image_dir():
+    return os.path.join(settings.MEDIA_ROOT, 'dev_images')
 
 @api_view(['POST', 'GET'])
 def videos_list(request):
@@ -95,7 +99,9 @@ def video_stream(request, video_id):
 
             if annotated and svc and svc.ready:
                 try:
-                    if frame_idx % INFER_EVERY == 0 or not cached:
+                    import config as cfg
+                    infer_every = INFER_EVERY if getattr(cfg, 'LOW_LATENCY_MODE', True) else 1
+                    if frame_idx % infer_every == 0 or not cached:
                         enabled = get_globally_enabled_model_keys()
                         if enabled:
                             new = {}
@@ -134,6 +140,9 @@ def video_stream(request, video_id):
 def video_analyze(request, video_id):
     video = DevVideo.objects.get(pk=video_id)
     sample_every = int(request.data.get('sample_every_n_frames', 10))
+    import config as cfg
+    if not getattr(cfg, 'LOW_LATENCY_MODE', True):
+        sample_every = 1
     max_samples = int(request.data.get('max_samples', 50))
 
     svc = get_inference_service()
@@ -168,6 +177,73 @@ def video_analyze(request, video_id):
         'results': results,
     })
 
+
+@api_view(['POST', 'GET'])
+def images_list(request):
+    if request.method == 'GET':
+        images = DevImage.objects.all().order_by('-uploaded_at')
+        return Response(DevImageSerializer(images, many=True).data)
+
+    file = request.FILES.get('image')
+    if not file:
+        return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    upload_dir = _dev_image_dir()
+    os.makedirs(upload_dir, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}_{file.name}"
+    filepath = os.path.join(upload_dir, filename)
+
+    with open(filepath, 'wb') as f:
+        for chunk in file.chunks():
+            f.write(chunk)
+
+    frame = cv2.imread(filepath)
+    if frame is None:
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
+        return Response({'error': 'Uploaded file is not a readable image'}, status=status.HTTP_400_BAD_REQUEST)
+
+    height, width = frame.shape[:2]
+    image = DevImage.objects.create(
+        original_filename=file.name,
+        file_path=filepath,
+        file_size=file.size,
+        content_type=file.content_type or 'application/octet-stream',
+        width=width,
+        height=height,
+    )
+    return Response(DevImageSerializer(image).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+def image_file(request, image_id):
+    image = DevImage.objects.get(pk=image_id)
+    return FileResponse(open(image.file_path, 'rb'), content_type=image.content_type or 'application/octet-stream')
+
+
+@api_view(['POST'])
+def image_analyze(request, image_id):
+    image = DevImage.objects.get(pk=image_id)
+    frame = cv2.imread(image.file_path)
+    if frame is None:
+        return Response({'error': 'Could not read image'}, status=status.HTTP_400_BAD_REQUEST)
+
+    svc = get_inference_service()
+    enabled = get_globally_enabled_model_keys()
+    detections = {}
+    for key in enabled:
+        detections[key] = svc.run_inference_on_frame(key, frame, camera_id=0)
+
+    height, width = frame.shape[:2]
+    return Response({
+        'image_id': image.id,
+        'width': width,
+        'height': height,
+        'detections': detections,
+    })
+
 @api_view(['GET', 'PUT'])
 def thresholds_view(request):
     import sys
@@ -175,6 +251,12 @@ def thresholds_view(request):
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
     import config as cfg
+    from inference_device import resolve_inference_device
+
+    def parse_bool(value):
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
     if request.method == 'GET':
         return Response({
@@ -183,6 +265,13 @@ def thresholds_view(request):
             'ear_threshold': getattr(cfg, 'EAR_THRESHOLD', 0.21),
             'mar_threshold': getattr(cfg, 'MAR_THRESHOLD', 0.65),
             'head_tilt_degrees': cfg.HEAD_TILT_ALERT_DEGREES,
+            'low_latency_mode': bool(getattr(cfg, 'LOW_LATENCY_MODE', True)),
+            'temporal_smoothing_enabled': bool(getattr(cfg, 'TEMPORAL_SMOOTHING_ENABLED', False)),
+            'temporal_smoothing_effective': bool(
+                getattr(cfg, 'TEMPORAL_SMOOTHING_ENABLED', False)
+                and not getattr(cfg, 'LOW_LATENCY_MODE', True)
+            ),
+            'inference_device': resolve_inference_device(),
         })
 
     data = request.data
@@ -196,6 +285,10 @@ def thresholds_view(request):
         cfg.MAR_THRESHOLD = float(data['mar_threshold'])
     if 'head_tilt_degrees' in data:
         cfg.HEAD_TILT_ALERT_DEGREES = float(data['head_tilt_degrees'])
+    if 'low_latency_mode' in data:
+        cfg.LOW_LATENCY_MODE = parse_bool(data['low_latency_mode'])
+    if 'temporal_smoothing_enabled' in data:
+        cfg.TEMPORAL_SMOOTHING_ENABLED = parse_bool(data['temporal_smoothing_enabled'])
 
     return Response({'status': 'updated'})
 

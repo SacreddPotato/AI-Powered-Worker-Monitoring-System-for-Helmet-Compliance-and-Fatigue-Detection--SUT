@@ -41,7 +41,14 @@ def _make_annotator(camera_id, overlays_csv):
 
         counter[0] += 1
         try:
-            if counter[0] % INFERENCE_INTERVAL == 1 or not cached:
+            import config as cfg
+            low_latency_mode = bool(getattr(cfg, 'LOW_LATENCY_MODE', True))
+            inference_due = (
+                counter[0] % INFERENCE_INTERVAL == 1
+                if low_latency_mode
+                else True
+            )
+            if inference_due or not cached:
                 enabled = get_effective_enabled_model_keys(camera_id)
                 if not enabled:
                     cached.clear()

@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../api";
 import Toggle from "../components/Toggle";
 import useCameraStream from "../hooks/useCameraStream";
 
-const TABS = ["Video Analysis", "Live Camera Test", "Threshold Tuning"];
+const TABS = ["Video Analysis", "Image Analysis", "Live Camera Test", "Threshold Tuning"];
 const ALL_MODELS = ["helmet", "fatigue", "vest", "gloves", "goggles", "boots", "faceshield", "safetysuit"];
 
 export default function DevLabPage() {
@@ -55,13 +55,18 @@ export default function DevLabPage() {
             <VideoAnalysis />
           </div>
         )}
-        {visited.has(1) && (
-          <div className={`h-full ${activeTab === 1 ? "" : "hidden"}`}>
+        {visited.has(2) && (
+          <div className={`h-full ${activeTab === 2 ? "" : "hidden"}`}>
             <LiveCameraTest />
           </div>
         )}
-        {visited.has(2) && (
-          <div className={`h-full ${activeTab === 2 ? "" : "hidden"}`}>
+        {visited.has(1) && (
+          <div className={`h-full ${activeTab === 1 ? "" : "hidden"}`}>
+            <ImageAnalysis />
+          </div>
+        )}
+        {visited.has(3) && (
+          <div className={`h-full ${activeTab === 3 ? "" : "hidden"}`}>
             <ThresholdTuning />
           </div>
         )}
@@ -204,6 +209,7 @@ function VideoAnalysis() {
   const [overlays, setOverlays] = useState([...ALL_MODELS]);
   const [logs, setLogs] = useState([]);
   const [config, setConfig] = useState({ sample_every_n_frames: 3 });
+  const [runtimeSettings, setRuntimeSettings] = useState(null);
   const [videoDone, setVideoDone] = useState(false);
 
   const fileRef = useRef();
@@ -222,6 +228,10 @@ function VideoAnalysis() {
   const playbarRef = useRef();
 
   useEffect(() => { overlaysRef.current = overlays; }, [overlays]);
+
+  useEffect(() => {
+    api.getThresholds().then(setRuntimeSettings).catch(() => {});
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {
@@ -278,6 +288,9 @@ function VideoAnalysis() {
 
   function handleStart() {
     if (!video) return;
+    const effectiveSampleEvery = runtimeSettings && !runtimeSettings.low_latency_mode
+      ? 1
+      : config.sample_every_n_frames;
 
     // Reset previous analysis
     frameMapRef.current.clear();
@@ -301,9 +314,9 @@ function VideoAnalysis() {
       ws.send(JSON.stringify({
         action: "start",
         video_id: video.id,
-        sample_every_n_frames: config.sample_every_n_frames,
+        sample_every_n_frames: effectiveSampleEvery,
       }));
-      addLog("info", `Live analysis started — sampling every ${config.sample_every_n_frames} frames`);
+      addLog("info", `Live analysis started — sampling every ${effectiveSampleEvery} frames`);
     };
 
     ws.onmessage = (e) => {
@@ -476,7 +489,9 @@ function VideoAnalysis() {
   }, [video]);
 
   const pct = progress && progress.total > 0
-    ? Math.round((progress.analyzed / (progress.total / config.sample_every_n_frames)) * 100)
+    ? Math.round((progress.analyzed / (progress.total / (
+        runtimeSettings && !runtimeSettings.low_latency_mode ? 1 : config.sample_every_n_frames
+      ))) * 100)
     : 0;
 
   return (
@@ -659,6 +674,210 @@ function VideoAnalysis() {
   );
 }
 
+// ============================================================
+// Image Analysis
+// ============================================================
+
+function ImageAnalysis() {
+  const [file, setFile] = useState(null);
+  const [localUrl, setLocalUrl] = useState(null);
+  const [image, setImage] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
+  const [overlays, setOverlays] = useState([...ALL_MODELS]);
+  const [logs, setLogs] = useState([]);
+  const [running, setRunning] = useState(false);
+
+  const fileRef = useRef();
+  const imgRef = useRef();
+  const canvasRef = useRef();
+
+  function addLog(level, msg) {
+    const ts = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, { ts, level, msg }]);
+  }
+
+  function toggleOverlay(key) {
+    setOverlays((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
+
+  function handleFileSelect(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    setImage(null);
+    setAnalysisData(null);
+    if (localUrl) URL.revokeObjectURL(localUrl);
+    setLocalUrl(URL.createObjectURL(f));
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    addLog("info", `Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+    try {
+      const uploaded = await api.uploadImage(file);
+      setImage(uploaded);
+      addLog("ok", `Upload complete — ID: ${uploaded.id}, ${uploaded.width}x${uploaded.height}`);
+    } catch (err) {
+      addLog("err", `Upload failed: ${err.message}`);
+    }
+  }
+
+  async function handleAnalyze() {
+    if (!image) return;
+    setRunning(true);
+    setAnalysisData(null);
+    addLog("info", "Image inference started");
+    try {
+      const result = await api.analyzeImage(image.id);
+      setAnalysisData(result);
+      addLog("ok", "Image inference complete");
+    } catch (err) {
+      addLog("err", `Analysis failed: ${err.message}`);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const drawImageResults = useCallback(() => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!analysisData || !img.naturalWidth || !img.naturalHeight) return;
+
+    const sourceW = analysisData.width || img.naturalWidth;
+    const sourceH = analysisData.height || img.naturalHeight;
+    const scale = Math.min(canvas.width / sourceW, canvas.height / sourceH);
+    const offX = (canvas.width - sourceW * scale) / 2;
+    const offY = (canvas.height - sourceH * scale) / 2;
+    const tx = (x) => offX + x * scale;
+    const ty = (y) => offY + y * scale;
+
+    for (const [key, det] of Object.entries(analysisData.detections || {})) {
+      if (!overlays.includes(key)) continue;
+      if (det.status !== "ok") continue;
+      const payload = det.payload || {};
+      if (key === "fatigue") drawFatigue(ctx, payload, tx, ty, scale);
+      else drawPPEBoxes(ctx, payload, key, tx, ty, scale);
+    }
+  }, [analysisData, overlays]);
+
+  useEffect(() => {
+    drawImageResults();
+  }, [drawImageResults]);
+
+  return (
+    <div className="flex h-full">
+      <div className="w-1/2 border-r border-zinc-800/60 p-4 overflow-y-auto space-y-5">
+        <Section title="Upload Image">
+          <div
+            onClick={() => fileRef.current?.click()}
+            className="border-2 border-dashed border-zinc-800 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500/50 transition-colors"
+          >
+            <div className="text-2xl text-zinc-600 mb-2">&#128247;</div>
+            <div className="text-[11px] text-zinc-500">{file ? file.name : "Drop image or click to browse"}</div>
+            <div className="text-[9px] text-zinc-700 mt-1">PNG, JPG, JPEG, WEBP</div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+          </div>
+          {file && !image && (
+            <button onClick={handleUpload} className="mt-2 w-full py-2 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25">
+              Upload & Prepare for Inference
+            </button>
+          )}
+        </Section>
+
+        {image && (
+          <>
+            <Section title="Annotation Overlays">
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {ALL_MODELS.map((key) => (
+                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                    <Toggle enabled={overlays.includes(key)} onChange={() => toggleOverlay(key)} size="sm" />
+                    <span className={`text-[10px] capitalize ${overlays.includes(key) ? "text-zinc-300" : "text-zinc-600"}`}>{key}</span>
+                  </label>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Inference">
+              <button
+                onClick={handleAnalyze}
+                disabled={running}
+                className="w-full py-2.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-semibold hover:bg-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {running ? "Running..." : "Run Image Inference"}
+              </button>
+            </Section>
+          </>
+        )}
+
+        <Section title="Execution Log">
+          <div className="bg-[#0c0c0f] border border-zinc-800/60 rounded-lg p-2.5 font-mono text-[9px] leading-relaxed max-h-40 overflow-y-auto">
+            {logs.map((l, i) => (
+              <div key={i}>
+                <span className="text-zinc-700">[{l.ts}]</span>{" "}
+                <span className={logColor(l.level)}>{l.level.toUpperCase()}</span>{" "}
+                <span className="text-zinc-500">{l.msg}</span>
+              </div>
+            ))}
+            {logs.length === 0 && <span className="text-zinc-700">Waiting for activity...</span>}
+          </div>
+        </Section>
+      </div>
+
+      <div className="w-1/2 p-4 overflow-y-auto space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-zinc-100">{analysisData ? "Inference Complete" : "Image Preview"}</h3>
+          {image && <span className="text-[9px] text-zinc-500 font-mono">{image.width}x{image.height}</span>}
+        </div>
+
+        <div className="relative bg-surface-alt border border-zinc-800 rounded-lg aspect-video overflow-hidden">
+          {localUrl || image ? (
+            <>
+              <img
+                ref={imgRef}
+                src={image ? api.imageFileUrl(image.id) : localUrl}
+                alt="Image inference preview"
+                className="w-full h-full object-contain"
+                onLoad={drawImageResults}
+              />
+              <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-[10px] text-zinc-700">Select an image to preview</span>
+            </div>
+          )}
+        </div>
+
+        {analysisData && (
+          <div className="bg-surface-alt border border-zinc-800 rounded-lg p-3.5">
+            <h4 className="text-[11px] font-semibold text-zinc-100 mb-2">Detection Summary</h4>
+            {summarizeImageResults(analysisData.detections).map(({ key, detected, confidence }) => (
+              <ResultRow
+                key={key}
+                label={key}
+                value={`${detected ? "detected" : "clear"}${confidence != null ? ` (${(confidence * 100).toFixed(0)}%)` : ""}`}
+                variant={detected ? "danger" : "ok"}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Binary search: find nearest analyzed frame <= target
 function findNearest(sortedFrames, target) {
   if (sortedFrames.length === 0) return null;
@@ -752,14 +971,42 @@ function ThresholdTuning() {
 
   async function handleChange(key, value) {
     const updated = { ...thresholds, [key]: value };
+    if (key === "low_latency_mode") {
+      updated.temporal_smoothing_effective = Boolean(
+        thresholds.temporal_smoothing_enabled && !value
+      );
+    }
+    if (key === "temporal_smoothing_enabled") {
+      updated.temporal_smoothing_effective = Boolean(
+        value && !thresholds.low_latency_mode
+      );
+    }
     setThresholds(updated);
     await api.updateThresholds({ [key]: value });
+    const fresh = await api.getThresholds();
+    setThresholds(fresh);
   }
 
   if (!thresholds) return <div className="p-5 text-zinc-600 text-xs">Loading...</div>;
 
   return (
     <div className="p-5 max-w-lg space-y-5">
+      <Section title="Runtime Mode">
+        <ToggleRow
+          label="Low Latency Mode"
+          enabled={Boolean(thresholds.low_latency_mode)}
+          onChange={(v) => handleChange("low_latency_mode", v)}
+        />
+        <ToggleRow
+          label="Temporal Smoothing"
+          enabled={Boolean(thresholds.temporal_smoothing_enabled)}
+          disabled={Boolean(thresholds.low_latency_mode)}
+          title={thresholds.low_latency_mode ? "Available when Low Latency Mode is off" : undefined}
+          onChange={(v) => handleChange("temporal_smoothing_enabled", v)}
+        />
+        <ResultRow label="Smoothing effective" value={thresholds.temporal_smoothing_effective ? "on" : "off"} variant={thresholds.temporal_smoothing_effective ? "ok" : undefined} />
+        <ResultRow label="Inference device" value={thresholds.inference_device || "auto"} variant={String(thresholds.inference_device || "").startsWith("cuda") ? "ok" : undefined} />
+      </Section>
       <Section title="Detection Thresholds">
         <Slider label="Confidence threshold" value={thresholds.confidence} min={0} max={1} step={0.01} onChange={(v) => handleChange("confidence", v)} />
         <Slider label="Fatigue consecutive frames" value={thresholds.fatigue_consecutive_frames} min={1} max={30} step={1} onChange={(v) => handleChange("fatigue_consecutive_frames", v)} />
@@ -767,6 +1014,15 @@ function ThresholdTuning() {
         <Slider label="MAR threshold" value={thresholds.mar_threshold} min={0} max={1} step={0.01} onChange={(v) => handleChange("mar_threshold", v)} />
         <Slider label="Head tilt degrees" value={thresholds.head_tilt_degrees} min={5} max={45} step={0.5} onChange={(v) => handleChange("head_tilt_degrees", v)} />
       </Section>
+    </div>
+  );
+}
+
+function ToggleRow({ label, enabled, disabled = false, title, onChange }) {
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-zinc-800/50">
+      <span className={`text-[10px] ${disabled ? "text-zinc-600" : "text-zinc-400"}`}>{label}</span>
+      <Toggle enabled={enabled} disabled={disabled} title={title} onChange={onChange} size="md" />
     </div>
   );
 }
@@ -899,4 +1155,12 @@ function summarizeResults(results) {
     });
   });
   return Object.entries(counts).map(([key, count]) => ({ key, count }));
+}
+
+function summarizeImageResults(detections) {
+  return Object.entries(detections || {}).map(([key, det]) => ({
+    key,
+    detected: Boolean(det.detected || det.payload?.missing_count > 0),
+    confidence: det.confidence,
+  }));
 }

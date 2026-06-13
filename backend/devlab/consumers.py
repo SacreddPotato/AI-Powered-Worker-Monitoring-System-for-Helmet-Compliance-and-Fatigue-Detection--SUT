@@ -44,6 +44,9 @@ class VideoAnalysisConsumer(WebsocketConsumer):
 
     def _run(self, video_id, sample_every):
         try:
+            import config as cfg
+            if not getattr(cfg, 'LOW_LATENCY_MODE', True):
+                sample_every = 1
             video = DevVideo.objects.get(pk=video_id)
             svc = get_inference_service()
             svc.preload()

@@ -68,4 +68,6 @@ backend/ml_models/*.task
 # documentation benchmark dataset cache
 .benchmark_data/
 docs/*
+!docs/model_output_examples/
+!docs/model_output_examples/**
 .kaggle/

@@ -25,8 +25,9 @@ class FatigueHybridEngine:
         face_landmarker_path: str,
         head_tilt_alert_degrees: float = 15.0,
         fatigue_threshold: float = 0.55,
+        device: str = None,
     ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.head_tilt_alert_degrees = float(head_tilt_alert_degrees)
         self.fatigue_threshold = float(fatigue_threshold)
         self.ear_threshold = 0.28

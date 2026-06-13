@@ -10,12 +10,12 @@ from typing import Dict, List
 import cv2
 import numpy as np
 from PIL import Image
-from ultralytics import YOLO
 
 from config import (
     FATIGUE_CONSECUTIVE_FRAMES_THRESHOLD,
     HEAD_TILT_ALERT_DEGREES,
 )
+from inference_device import resolve_inference_device, torch_device_name
 fatigue_import_error = None
 try:
     from fatigue_engine import FatigueHybridEngine
@@ -45,6 +45,12 @@ _FOOTWEAR_LABEL_HINTS = {
     "trainer",
     "footwear",
 }
+
+
+def _load_yolo_model(weights_path: str):
+    from ultralytics import YOLO
+
+    return YOLO(weights_path)
 
 
 def decode_base64_image(image_base64: str):
@@ -140,6 +146,7 @@ class PPEModelAdapter:
         }
         self.strict_target_match = bool(model_info.get("strict_target_match", True))
         self.inference_confidence = float(model_info.get("inference_confidence", 0.35))
+        self.inference_device = resolve_inference_device()
         self.supports_qr = model_key == "vest"
         self._absence_uses_features = model_key in {"gloves", "goggles", "boots"}
         self._absence_uses_person_overlap = model_key in {"vest", "faceshield", "safetysuit"}
@@ -183,7 +190,7 @@ class PPEModelAdapter:
             return
 
         try:
-            self._model = YOLO(self.weights_path)
+            self._model = _load_yolo_model(self.weights_path)
             names = self._model.names or {}
             self.model_classes = sorted(
                 {
@@ -364,7 +371,12 @@ class PPEModelAdapter:
 
     def _infer_boot_presence(self, foot_crop):
         try:
-            region_results = self._model(foot_crop, conf=0.25, verbose=False)
+            region_results = self._model(
+                foot_crop,
+                conf=0.25,
+                device=self.inference_device,
+                verbose=False,
+            )
         except Exception:
             return False, 0.0, ""
 
@@ -489,7 +501,7 @@ class PPEModelAdapter:
                 return
             self.downloaded = True
         try:
-            self._person_model = YOLO(self.person_model_path)
+            self._person_model = _load_yolo_model(self.person_model_path)
         except Exception as exc:
             self.load_error = (
                 f"{self.load_error}; " if self.load_error else ""
@@ -499,7 +511,13 @@ class PPEModelAdapter:
         if self._person_model is None:
             return []
         try:
-            person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
+            person_results = self._person_model(
+                frame,
+                classes=[0],
+                conf=0.35,
+                device=self.inference_device,
+                verbose=False,
+            )
             out = []
             for box in person_results[0].boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -545,7 +563,12 @@ class PPEModelAdapter:
             return self._infer_boots_with_feature_regions(frame, camera_id=camera_id)
 
         try:
-            results = self._model(frame, conf=self.inference_confidence, verbose=False)
+            results = self._model(
+                frame,
+                conf=self.inference_confidence,
+                device=self.inference_device,
+                verbose=False,
+            )
             boxes = results[0].boxes or []
             names = results[0].names or {}
             selected_confidences = []
@@ -752,7 +775,7 @@ class HelmetModelAdapter(PPEModelAdapter):
             self.downloaded = True
 
         try:
-            self._person_model = YOLO(self.person_model_path)
+            self._person_model = _load_yolo_model(self.person_model_path)
         except Exception as exc:
             self.available = False
             self.load_error = f"Failed to load person model: {exc}"
@@ -767,8 +790,19 @@ class HelmetModelAdapter(PPEModelAdapter):
             }
 
         try:
-            helmet_results = self._model(frame, conf=self.inference_confidence, verbose=False)
-            person_results = self._person_model(frame, classes=[0], conf=0.35, verbose=False)
+            helmet_results = self._model(
+                frame,
+                conf=self.inference_confidence,
+                device=self.inference_device,
+                verbose=False,
+            )
+            person_results = self._person_model(
+                frame,
+                classes=[0],
+                conf=0.35,
+                device=self.inference_device,
+                verbose=False,
+            )
             model_class_names = getattr(self._model, "names", None) or {}
             helmet_boxes = []
             for box in helmet_results[0].boxes:
@@ -912,6 +946,7 @@ class FatigueModelAdapter:
                 model_path=self.weights_path,
                 face_landmarker_path=self.face_landmarker_path,
                 head_tilt_alert_degrees=HEAD_TILT_ALERT_DEGREES,
+                device=torch_device_name(resolve_inference_device()),
             )
             self.available = True
         except Exception as exc:
